@@ -4,7 +4,7 @@ with open("README.md","r",encoding="utf-8") as fh:
 
 setup(
     name="slash_help",
-    version="1.0.0",
+    version="1.0.1",
     description="Slash commands help for discord-interactions",
     long_description=long_description,
     long_description_content_type="text/markdown",
