@@ -12,7 +12,7 @@ setup(
     author="Toricane",
     author_email="prjwl028@gmail.com",
     license="MIT",
-    packages=["shash_help"],
+    packages=["slash_help"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "Development Status :: 3 - Alpha",
