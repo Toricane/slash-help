@@ -50,7 +50,6 @@ class SlashHelp:
             "help",
             "Get help!",
             options=[create_option("command", "What command", 3, False)],
-            guild_ids=[874781880489222154],
         )
 
     async def send_help(self, ctx: SlashContext, command: Optional[str] = None) -> None:
