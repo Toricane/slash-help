@@ -1,5 +1,5 @@
 # SlashHelp
-discord-interactions v3 slash command help
+discord-py-interactions v3 slash command help
 
 ## Usage:
 ```py
@@ -14,7 +14,7 @@ slash_help = SlashHelp(bot)
 ```
 ## Install:
 ```
-pip install -U slash_help
+pip install -U slash-help
 ```
 
 # WILL UPDATE LATER
