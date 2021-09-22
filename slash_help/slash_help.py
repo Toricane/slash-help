@@ -36,6 +36,8 @@ class SlashHelp:
         colour: Optional[Colour] = Colour.default(),
         timeout: Optional[int] = 60,
         fields_per_embed: Optional[int] = 5,
+        extended_buttons: Optional[bool] = True,
+        use_select: Optional[bool] = True,
     ) -> None:
         if not hasattr(bot, "slash"):
             raise NoSlashVar
@@ -45,6 +47,8 @@ class SlashHelp:
         self.colour = colour
         self.timeout = timeout
         self.fields_per_embed = fields_per_embed
+        self.extended_buttons = extended_buttons
+        self.use_select = use_select
 
         self.slash.add_slash_command(
             self.send_help,
@@ -95,26 +99,8 @@ class SlashHelp:
                 _cmdopts.append(cmd.options)
                 _cmddescs.append(cmd.description)
         string = ""
-        num_cmd_embeds = 0
-        num_sub_embeds = 0
         num_cmds = len(_cmds)
         num_subs = len(_subs)
-        if num_cmds > 75:
-            num_cmd_embeds = 4
-        elif num_cmds > 50:
-            num_cmd_embeds = 3
-        elif num_cmds > 25:
-            num_cmd_embeds = 2
-        elif num_cmds > 0:
-            num_cmd_embeds = 1
-        if num_subs > 75:
-            num_sub_embeds = 4
-        elif num_subs > 50:
-            num_sub_embeds = 3
-        elif num_subs > 25:
-            num_sub_embeds = 2
-        elif num_subs > 0:
-            num_sub_embeds = 1
         pages = []
         embed = Embed(title="Help", colour=self.colour)
         embed.set_footer(text="Type /help command for more info on a command.")
@@ -138,11 +124,11 @@ class SlashHelp:
                     "No description"
                     if _cmddescs[_cmds.index(cmd)] is None
                     else _cmddescs[_cmds.index(cmd)]
-                )
+                ) + "\nHow to use:"
                 how_to_use = f"\n```\n/{cmd} "
                 for _dict in options:
                     _type = typer_dict(_dict["type"])
-                    how_to_use += f"{_dict['name']}: {_type}, "
+                    how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
                 how_to_use = (
                     how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
                 )
@@ -161,15 +147,22 @@ class SlashHelp:
                     "No description"
                     if _subdescs[_subs.index(sub)] is None
                     else _subdescs[_subs.index(sub)]
-                )
+                ) + "\nHow to use:"
                 how_to_use = f"\n```\n/{sub} "
                 for _dict in options:
                     _type = typer_dict(_dict["type"])
-                    how_to_use += f"{_dict['name']}: {_type}, "
+                    how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
                 how_to_use = (
                     how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
                 )
                 how_to_use += "\n```"
                 embed3.add_field(name=sub, value=desc + how_to_use, inline=False)
             pages.append(embed3)
-        await Paginator(self.bot, ctx, pages, timeout=self.timeout).run()
+        await Paginator(
+            self.bot,
+            ctx,
+            pages,
+            timeout=self.timeout,
+            useFirstLast=self.extended_buttons,
+            useSelect=self.use_select,
+        ).run()
