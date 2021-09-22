@@ -1,5 +1,5 @@
 from discord_slash.utils.manage_commands import create_option
-from discord_slash import SlashCommand, SlashContext
+from discord_slash import SlashContext
 
 from discord import Embed, Colour
 from discord import Client
@@ -7,7 +7,7 @@ from discord.ext.commands import Bot
 
 from dinteractions_Paginator import Paginator
 
-from typing import Union, Optional
+from typing import Union, Optional, List
 
 from .errors import NoSlashVar
 
@@ -32,7 +32,7 @@ class SlashHelp:
     def __init__(
         self,
         bot: Union[Bot, Client],
-        *,
+        guild_ids: Optional[List[int]] = None,
         colour: Optional[Colour] = Colour.default(),
         timeout: Optional[int] = 60,
         fields_per_embed: Optional[int] = 5,
@@ -41,6 +41,7 @@ class SlashHelp:
             raise NoSlashVar
         self.bot = bot
         self.slash = bot.slash
+        self.guild_ids = guild_ids
         self.colour = colour
         self.timeout = timeout
         self.fields_per_embed = fields_per_embed
@@ -49,7 +50,8 @@ class SlashHelp:
             self.send_help,
             "help",
             "Get help!",
-            options=[create_option("command", "What command", 3, False)],
+            options=[create_option("command", "What command?", 3, False)],
+            guild_ids=self.guild_ids,
         )
 
     async def send_help(self, ctx: SlashContext, command: Optional[str] = None) -> None:
