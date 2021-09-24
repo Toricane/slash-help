@@ -115,7 +115,6 @@ class SlashHelp:
         no_category_description: Optional[str] = "No description",
         extended_buttons: Optional[bool] = True,
         use_select: Optional[bool] = True,
-        use_subcommand: Optional[bool] = True,
     ) -> None:
         self.bot = bot
         self.slash = slash
@@ -134,7 +133,6 @@ class SlashHelp:
         self.no_category_description = no_category_description
         self.extended_buttons = extended_buttons
         self.use_select = use_select
-        self.use_subcommand = use_subcommand
 
         self.slash.add_slash_command(
             self.send_help,
