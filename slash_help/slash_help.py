@@ -1,15 +1,16 @@
 from discord_slash.utils.manage_commands import create_option
-from discord_slash import SlashContext
+from discord_slash import SlashContext, SlashCommand
 
-from discord import Embed, Colour
+from discord import Embed, Colour, Color
 from discord import Client
 from discord.ext.commands import Bot
 
 from dinteractions_Paginator import Paginator
 
 from typing import Union, Optional, List
+import asyncio
 
-from .errors import NoSlashVar
+from .errors import CommandsNotFound
 
 
 def typer_dict(_type) -> str:
@@ -28,27 +29,112 @@ def typer_dict(_type) -> str:
     return _typer_dict[_type]
 
 
+async def get_all_commands(slash):
+    return await slash.to_dict()
+
+
+async def async_all_commands(self):
+    result = await self.slash.to_dict()
+    if result["global"]:  # if there are global commands
+        return result["global"]
+    elif result["guild"] and self.guild_ids is not None:  # if there are guild commands
+        guild_has_commands = False
+        guild_with_commands = None
+        for guild_id in self.guild_ids:
+            if result["guild"][guild_id]:
+                guild_has_commands = True
+                guild_with_commands = guild_id
+                break
+        if not guild_has_commands:  # no commands in specified guild
+            raise CommandsNotFound
+        return result["guild"][guild_with_commands]
+    else:  # if there are no commands
+        raise CommandsNotFound
+
+
+def all_commands(self):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    result = loop.run_until_complete(get_all_commands(self.slash))
+    if result["global"]:  # if there are global commands
+        return result["global"]
+    elif result["guild"] and self.guild_ids is not None:  # if there are guild commands
+        guild_has_commands = False
+        guild_with_commands = None
+        for guild_id in self.guild_ids:
+            if result["guild"][guild_id]:
+                guild_has_commands = True
+                guild_with_commands = guild_id
+                break
+        if not guild_has_commands:  # no commands in specified guild
+            raise CommandsNotFound
+        return result["guild"][guild_with_commands]
+    else:  # if there are no commands
+        raise CommandsNotFound
+
+
+async def async_separated(self):
+    _all_commands = await async_all_commands(self)
+    commands = []
+    subcommands = []
+    for command in _all_commands:
+        if command["options"]:
+            if command["options"][0]["type"] in (1, 2):
+                subcommands.append(command)
+                continue
+        commands.append(command)
+    return [commands, subcommands]
+
+
+def separated(self):
+    _all_commands = all_commands(self)
+    commands = []
+    subcommands = []
+    for command in _all_commands:
+        if command["options"]:
+            if command["options"][0]["type"] in (1, 2):
+                subcommands.append(command)
+                continue
+        commands.append(command)
+    return [commands, subcommands]
+
+
 class SlashHelp:
     def __init__(
         self,
         bot: Union[Bot, Client],
+        slash: SlashCommand,
         guild_ids: Optional[List[int]] = None,
+        *,
+        color: Optional[Color] = Color.default(),
         colour: Optional[Colour] = Colour.default(),
         timeout: Optional[int] = 60,
         fields_per_embed: Optional[int] = 5,
+        footer: Optional[str] = None,
+        front_description: Optional[str] = None,
+        no_category_description: Optional[str] = "No description",
         extended_buttons: Optional[bool] = True,
         use_select: Optional[bool] = True,
+        use_subcommand: Optional[bool] = True,
     ) -> None:
-        if not hasattr(bot, "slash"):
-            raise NoSlashVar
         self.bot = bot
-        self.slash = bot.slash
+        self.slash = slash
         self.guild_ids = guild_ids
-        self.colour = colour
+        self.colour = (
+            colour
+            if colour != Colour.default()
+            else color
+            if color != Color.default()
+            else colour
+        )
         self.timeout = timeout
         self.fields_per_embed = fields_per_embed
+        self.footer = footer
+        self.front_description = front_description
+        self.no_category_description = no_category_description
         self.extended_buttons = extended_buttons
         self.use_select = use_select
+        self.use_subcommand = use_subcommand
 
         self.slash.add_slash_command(
             self.send_help,
@@ -61,103 +147,170 @@ class SlashHelp:
     async def send_help(self, ctx: SlashContext, command: Optional[str] = None) -> None:
         if command is not None:
             return
-        commands = self.slash.commands.values()
-        subcommands = self.slash.subcommands.values()
-        _cmds = []
-        _cmdopts = []
-        _cmddescs = []
-        _subs = []
-        _subopts = []
-        _subdescs = []
-        for sub in subcommands:
-            for key in sub.keys():
-                try:
-                    _subs.append(
-                        f"{sub[key].base}{f' {sub[key].subcommand_group} ' if sub[key].subcommand_group is not None else ' '}{key}"
+        commands, subcommands = await async_separated(self)
+        first_page = (
+            Embed(title="Help", color=self.colour)
+            if self.front_description is None
+            else Embed(
+                title="Help", description=self.front_description, color=self.colour
+            )
+        )
+        value1 = value2 = ""
+        cogs = {}
+        cog_descs = {}
+        for command in commands:
+            the_cog = getattr(self.slash.commands[command["name"]], "cog", None)
+            cog_name = "No Category" if the_cog is None else the_cog.qualified_name
+            cogs[cog_name] = []
+            cog_descs[cog_name] = (
+                "No description" if the_cog is None else the_cog.description
+            )
+        for command in commands:
+            the_cog = getattr(self.slash.commands[command["name"]], "cog", None)
+            cog_name = "No Category" if the_cog is None else the_cog.qualified_name
+            cogs[cog_name].append(
+                [command["name"], command["description"], command["options"]]
+            )
+        for subcommand in subcommands:
+            base = subcommand["name"]
+            sub_command_groups = []
+            sub_commands = []
+            sub_command_group_name = []
+            for option in subcommand["options"]:
+                if option["type"] == 1:
+                    sub_commands.append(option["name"])
+                elif option["type"] == 2:
+                    sub_command_groups.append(option["name"])
+                    sub_command_group_name.append(option["options"][0]["name"])
+            if sub_commands:
+                for sub_command in sub_commands:
+                    the_cog = getattr(
+                        self.slash.subcommands[base][sub_command], "cog", None
                     )
-                    _subopts.append(sub[key].options)
-                    _subdescs.append(sub[key].description)
-                except AttributeError:
-                    subc = sub[key].values()
-                    for s in subc:
-                        _subs.append(
-                            f"{s.base}{f' {s.subcommand_group} ' if s.subcommand_group is not None else ' '}{s.name}"
+                    cog_name = (
+                        "No Category" if the_cog is None else the_cog.qualified_name
+                    )
+                    if cog_name not in cogs.keys():
+                        cogs[cog_name] = []
+                        cog_descs[cog_name] = (
+                            "No description" if the_cog is None else the_cog.description
                         )
-                        _subopts.append(s.options)
-                        _subdescs.append(s.description)
-        x = 0
-        for cmd in commands:
-            in_sub = False
-            if x == 0:
-                x += 1
-                continue
-            for sub in _subs:
-                if cmd.name in sub:
-                    in_sub = True
-            if not in_sub:
-                _cmds.append(cmd.name)
-                _cmdopts.append(cmd.options)
-                _cmddescs.append(cmd.description)
-        string = ""
-        num_cmds = len(_cmds)
-        num_subs = len(_subs)
-        pages = []
-        embed = Embed(title="Help", colour=self.colour)
-        embed.set_footer(text="Type /help command for more info on a command.")
-        for cmd in _cmds:
-            string += cmd + "\n"
-        embed.add_field(name="Commands:", value=string)
-        string = ""
-        for sub in _subs:
-            string += sub + "\n"
-        embed.add_field(name="Subcommands:", value=string)
-        pages.append(embed)
-        for i in range(0, num_cmds, self.fields_per_embed):
-            embed2 = Embed(
-                title=f"Commands {i + 1} - {i + self.fields_per_embed}",
-                description="The commands of the bot!",
-                colour=self.colour,
-            )
-            for cmd in _cmds[i : (i + self.fields_per_embed)]:
-                options = _cmdopts[_cmds.index(cmd)]
-                desc = (
-                    "No description"
-                    if _cmddescs[_cmds.index(cmd)] is None
-                    else _cmddescs[_cmds.index(cmd)]
-                ) + "\nHow to use:"
-                how_to_use = f"\n```\n/{cmd} "
-                for _dict in options:
-                    _type = typer_dict(_dict["type"])
-                    how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
-                how_to_use = (
-                    how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
+            if sub_command_groups:
+                for sub_command_group in sub_command_groups:
+                    for sub_command in sub_command_group_name:
+                        the_cog = getattr(
+                            self.slash.subcommands[base][sub_command_group][
+                                sub_command
+                            ],
+                            "cog",
+                            None,
+                        )
+                        cog_name = (
+                            "No Category" if the_cog is None else the_cog.qualified_name
+                        )
+                        if cog_name not in cogs.keys():
+                            cogs[cog_name] = []
+                            cog_descs[cog_name] = (
+                                "No description"
+                                if the_cog is None
+                                else the_cog.description
+                            )
+        for subcommand in subcommands:
+            base = subcommand["name"]
+            sub_command_groups = []
+            sub_commands = []
+            sub_command_descs = []
+            sub_command_opts = []
+            sub_command_group_name = []
+            sub_command_group_descs = []
+            sub_command_group_opts = []
+            for option in subcommand["options"]:
+                if option["type"] == 1:
+                    sub_commands.append(option["name"])
+                    sub_command_descs.append(option["description"])
+                    sub_command_opts.append(option["options"])
+                elif option["type"] == 2:
+                    sub_command_groups.append(option["name"])
+                    sub_command_group_name.append(option["options"][0]["name"])
+                    sub_command_group_descs.append(option["options"][0]["description"])
+                    sub_command_group_opts.append(option["options"][0]["options"])
+            if sub_commands:
+                for sub_command in sub_commands:
+                    the_cog = getattr(
+                        self.slash.subcommands[base][sub_command], "cog", None
+                    )
+                    cog_name = (
+                        "No Category" if the_cog is None else the_cog.qualified_name
+                    )
+                    cogs[cog_name].append(
+                        [f"{base} {sub_command}", sub_command_descs, sub_command_opts]
+                    )
+            if sub_command_groups:
+                for sub_command_group in sub_command_groups:
+                    for sub_command in sub_command_group_name:
+                        the_cog = getattr(
+                            self.slash.subcommands[base][sub_command_group][
+                                sub_command
+                            ],
+                            "cog",
+                            None,
+                        )
+                        cog_name = (
+                            "No Category" if the_cog is None else the_cog.qualified_name
+                        )
+                        cogs[cog_name].append(
+                            [
+                                f"{base} {sub_command_group} {sub_command}",
+                                sub_command_group_descs,
+                                sub_command_group_opts,
+                            ]
+                        )
+        for _cog in cogs:
+            value1 = f"{self.no_category_description if _cog == 'No Category' else cog_descs[_cog]}\n"
+            for cmd in cogs[_cog]:
+                value1 += f"`/{cmd[0]}`, "
+            value1 = value1[:-2] if value1.endswith(", ") else value1
+            first_page.add_field(name=_cog, value=value1, inline=False)
+        if self.footer is not None:
+            first_page.set_footer(text=self.footer)
+        pages = [first_page]
+        for _cog in cogs:
+            for i in range(0, len(cogs[_cog]), self.fields_per_embed):
+                embed2 = Embed(
+                    title=f"{_cog} {i + 1} - {i + self.fields_per_embed}",
+                    description=self.no_category_description
+                    if _cog == "No Category"
+                    else cog_descs[_cog],
+                    colour=self.colour,
                 )
-                how_to_use += "\n```"
-                embed2.add_field(name=cmd, value=desc + how_to_use, inline=False)
-            pages.append(embed2)
-        for i in range(0, num_subs, self.fields_per_embed):
-            embed3 = Embed(
-                title=f"Subcommands {i + 1}-{i + self.fields_per_embed}",
-                description="The subcommands of the bot!",
-                colour=self.colour,
-            )
-            for sub in _subs[i : (i + self.fields_per_embed)]:
-                options = _subopts[_subs.index(sub)]
-                desc = (
-                    "No description"
-                    if _subdescs[_subs.index(sub)] is None
-                    else _subdescs[_subs.index(sub)]
-                ) + "\nHow to use:"
-                how_to_use = f"\n```\n/{sub} "
-                for _dict in options:
-                    _type = typer_dict(_dict["type"])
-                    how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
-                how_to_use = (
-                    how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
-                )
-                how_to_use += "\n```"
-                embed3.add_field(name=sub, value=desc + how_to_use, inline=False)
-            pages.append(embed3)
+                for cmd in cogs[_cog][i : (i + self.fields_per_embed)]:
+                    cmd_name = cmd[0]
+                    cmd_desc = cmd[1]
+                    cmd_opts = cmd[2]
+                    desc = (
+                        "No description"
+                        if (cmd_desc is None or cmd_desc == [])
+                        else (cmd_desc[0] if isinstance(cmd_desc, list) else cmd_desc)
+                    ) + "\nHow to use:"
+                    how_to_use = f"\n```\n/{cmd_name} "
+                    for _dict in cmd_opts:
+                        if isinstance(_dict, list):
+                            for _dict_ in _dict:
+                                _type = typer_dict(_dict_["type"])
+                                how_to_use += f"[{_dict_['name']}: {'optional ' if not _dict_['required'] else ''}{_type}], "
+                        else:
+                            _type = typer_dict(_dict["type"])
+                            how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
+                    how_to_use = (
+                        how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
+                    )
+                    how_to_use += "\n```"
+                    embed2.add_field(
+                        name=cmd_name, value=desc + how_to_use, inline=False
+                    )
+                if self.footer is not None:
+                    embed2.set_footer(text=self.footer)
+                pages.append(embed2)
         await Paginator(
             self.bot,
             ctx,
