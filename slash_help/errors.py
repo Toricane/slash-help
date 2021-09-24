@@ -2,8 +2,8 @@ class SlashHelpError(Exception):
     """Base SlashHelp error"""
 
 
-class NoSlashVar(SlashHelpError):
+class CommandsNotFound(SlashHelpError):
     def __init__(self):
         super().__init__(
-            "No slash variable detected! Please create a slash variable:\n`slash = SlashCommand(bot, sync_commands=True)`"
+            "No commands detected! If you are only using guild commands, try specifying the guild id!"
         )
