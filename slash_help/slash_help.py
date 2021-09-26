@@ -9,8 +9,9 @@ from dinteractions_Paginator import Paginator
 
 from typing import Union, Optional, List
 import asyncio
+from re import search
 
-from .errors import CommandsNotFound
+from .errors import CommandsNotFound, NameNeeded, IncorrectName
 
 
 def typer_dict(_type) -> str:
@@ -52,42 +53,8 @@ async def async_all_commands(self):
         raise CommandsNotFound
 
 
-def all_commands(self):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    result = loop.run_until_complete(get_all_commands(self.slash))
-    if result["global"]:  # if there are global commands
-        return result["global"]
-    elif result["guild"] and self.guild_ids is not None:  # if there are guild commands
-        guild_has_commands = False
-        guild_with_commands = None
-        for guild_id in self.guild_ids:
-            if result["guild"][guild_id]:
-                guild_has_commands = True
-                guild_with_commands = guild_id
-                break
-        if not guild_has_commands:  # no commands in specified guild
-            raise CommandsNotFound
-        return result["guild"][guild_with_commands]
-    else:  # if there are no commands
-        raise CommandsNotFound
-
-
 async def async_separated(self):
     _all_commands = await async_all_commands(self)
-    commands = []
-    subcommands = []
-    for command in _all_commands:
-        if command["options"]:
-            if command["options"][0]["type"] in (1, 2):
-                subcommands.append(command)
-                continue
-        commands.append(command)
-    return [commands, subcommands]
-
-
-def separated(self):
-    _all_commands = all_commands(self)
     commands = []
     subcommands = []
     for command in _all_commands:
@@ -115,6 +82,8 @@ class SlashHelp:
         no_category_description: Optional[str] = "No description",
         extended_buttons: Optional[bool] = True,
         use_select: Optional[bool] = True,
+        use_subcommand: Optional[bool] = False,
+        bot_name: Optional[str] = None,
     ) -> None:
         self.bot = bot
         self.slash = slash
@@ -133,41 +102,48 @@ class SlashHelp:
         self.no_category_description = no_category_description
         self.extended_buttons = extended_buttons
         self.use_select = use_select
+        self.use_subcommand = use_subcommand
+        self.bot_name = bot_name
 
-        self.slash.add_slash_command(
-            self.send_help,
-            "help",
-            "Get help!",
-            options=[create_option("command", "What command?", 3, False)],
-            guild_ids=self.guild_ids,
-        )
+        if not self.use_subcommand:
+            self.slash.add_slash_command(
+                self.send_help,
+                "help",
+                "Get help!",
+                options=[create_option("command", "What command?", 3, False)],
+                guild_ids=self.guild_ids,
+            )
+        else:
+            if bot_name is None:
+                raise NameNeeded
+            is_bot_name = search(r"^[\w-]{1,32}$", bot_name)
+            if is_bot_name is None:
+                raise IncorrectName
+            self.slash.add_subcommand(
+                self.send_help,
+                base="help",
+                name=bot_name,
+                description="Get help!",
+                options=[create_option("command", "What command?", 3, False)],
+                guild_ids=self.guild_ids,
+            )
 
     async def send_help(self, ctx: SlashContext, command: Optional[str] = None) -> None:
-        if command is not None:
-            return
         commands, subcommands = await async_separated(self)
-        first_page = (
-            Embed(title="Help", color=self.colour)
-            if self.front_description is None
-            else Embed(
-                title="Help", description=self.front_description, color=self.colour
-            )
-        )
-        value1 = value2 = ""
         cogs = {}
         cog_descs = {}
-        for command in commands:
-            the_cog = getattr(self.slash.commands[command["name"]], "cog", None)
+        for command_ in commands:
+            the_cog = getattr(self.slash.commands[command_["name"]], "cog", None)
             cog_name = "No Category" if the_cog is None else the_cog.qualified_name
             cogs[cog_name] = []
             cog_descs[cog_name] = (
                 "No description" if the_cog is None else the_cog.description
             )
-        for command in commands:
-            the_cog = getattr(self.slash.commands[command["name"]], "cog", None)
+        for command_ in commands:
+            the_cog = getattr(self.slash.commands[command_["name"]], "cog", None)
             cog_name = "No Category" if the_cog is None else the_cog.qualified_name
             cogs[cog_name].append(
-                [command["name"], command["description"], command["options"]]
+                [command_["name"], command_["description"], command_["options"]]
             )
         for subcommand in subcommands:
             base = subcommand["name"]
@@ -241,7 +217,11 @@ class SlashHelp:
                         "No Category" if the_cog is None else the_cog.qualified_name
                     )
                     cogs[cog_name].append(
-                        [f"{base} {sub_command}", sub_command_descs, sub_command_opts]
+                        [
+                            f"{base} {sub_command}",
+                            sub_command_descs,
+                            sub_command_opts,
+                        ]
                     )
             if sub_command_groups:
                 for sub_command_group in sub_command_groups:
@@ -263,35 +243,32 @@ class SlashHelp:
                                 sub_command_group_opts,
                             ]
                         )
-        for _cog in cogs:
-            value1 = f"{self.no_category_description if _cog == 'No Category' else cog_descs[_cog]}\n"
-            for cmd in cogs[_cog]:
-                value1 += f"`/{cmd[0]}`, "
-            value1 = value1[:-2] if value1.endswith(", ") else value1
-            first_page.add_field(name=_cog, value=value1, inline=False)
-        if self.footer is not None:
-            first_page.set_footer(text=self.footer)
-        pages = [first_page]
-        for _cog in cogs:
-            for i in range(0, len(cogs[_cog]), self.fields_per_embed):
-                embed2 = Embed(
-                    title=f"{_cog} {i + 1} - {i + self.fields_per_embed}",
-                    description=self.no_category_description
-                    if _cog == "No Category"
-                    else cog_descs[_cog],
+        if command is not None:
+            matches = []
+            matches_desc = []
+            matches_opt = []
+            matches_embeds = []
+            for _cog in cogs.keys():
+                for lst in cogs[_cog]:
+                    if command in lst[0]:
+                        matches.append(lst[0])
+                        matches_desc.append(lst[1])
+                        matches_opt.append(lst[2])
+            if len(matches) == 0:
+                await ctx.send(
+                    "No matches found. Please try searching something different!"
+                )
+                return
+            for i in range(0, len(matches), self.fields_per_embed):
+                embed1 = Embed(
+                    title=f"Results for `{command}`",
+                    description=f"Search results {i + 1} - {i + self.fields_per_embed}",
                     colour=self.colour,
                 )
-                for cmd in cogs[_cog][i : (i + self.fields_per_embed)]:
-                    cmd_name = cmd[0]
-                    cmd_desc = cmd[1]
-                    cmd_opts = cmd[2]
-                    desc = (
-                        "No description"
-                        if (cmd_desc is None or cmd_desc == [])
-                        else (cmd_desc[0] if isinstance(cmd_desc, list) else cmd_desc)
-                    ) + "\nHow to use:"
-                    how_to_use = f"\n```\n/{cmd_name} "
-                    for _dict in cmd_opts:
+                for match in matches[i : (i + self.fields_per_embed)]:
+                    usage = f"{matches_desc[matches.index(match)][0] if isinstance(matches_desc[matches.index(match)], list) else matches_desc[matches.index(match)]}\nHow to use:"
+                    how_to_use = f"\n```\n/{match} "
+                    for _dict in matches_opt[matches.index(match)]:
                         if isinstance(_dict, list):
                             for _dict_ in _dict:
                                 _type = typer_dict(_dict_["type"])
@@ -303,17 +280,81 @@ class SlashHelp:
                         how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
                     )
                     how_to_use += "\n```"
-                    embed2.add_field(
-                        name=cmd_name, value=desc + how_to_use, inline=False
+                    usage += how_to_use
+                    embed1.add_field(name=match, value=usage, inline=False)
+                matches_embeds.append(embed1)
+            if len(matches_embeds) == 1:
+                await ctx.send(embed=matches_embeds[0])
+            else:
+                await Paginator(
+                    self.bot,
+                    ctx,
+                    matches_embeds,
+                    timeout=self.timeout,
+                    useFirstLast=self.extended_buttons,
+                    useSelect=self.use_select,
+                ).run()
+        else:
+            first_page = (
+                Embed(title="Help", color=self.colour)
+                if self.front_description is None
+                else Embed(
+                    title="Help", description=self.front_description, color=self.colour
+                )
+            )
+            for _cog in cogs:
+                value1 = f"{self.no_category_description if _cog == 'No Category' else cog_descs[_cog]}\n"
+                for cmd in cogs[_cog]:
+                    value1 += f"`/{cmd[0]}`, "
+                value1 = value1[:-2] if value1.endswith(", ") else value1
+                first_page.add_field(name=_cog, value=value1, inline=False)
+            if self.footer is not None:
+                first_page.set_footer(text=self.footer)
+            pages = [first_page]
+            for _cog in cogs:
+                for i in range(0, len(cogs[_cog]), self.fields_per_embed):
+                    embed2 = Embed(
+                        title=f"{_cog} {i + 1} - {i + self.fields_per_embed}",
+                        description=self.no_category_description
+                        if _cog == "No Category"
+                        else cog_descs[_cog],
+                        colour=self.colour,
                     )
-                if self.footer is not None:
-                    embed2.set_footer(text=self.footer)
-                pages.append(embed2)
-        await Paginator(
-            self.bot,
-            ctx,
-            pages,
-            timeout=self.timeout,
-            useFirstLast=self.extended_buttons,
-            useSelect=self.use_select,
-        ).run()
+                    for cmd in cogs[_cog][i : (i + self.fields_per_embed)]:
+                        cmd_name = cmd[0]
+                        cmd_desc = cmd[1]
+                        cmd_opts = cmd[2]
+                        desc = (
+                            "No description"
+                            if (cmd_desc is None or cmd_desc == [])
+                            else (
+                                cmd_desc[0] if isinstance(cmd_desc, list) else cmd_desc
+                            )
+                        ) + "\nHow to use:"
+                        how_to_use = f"\n```\n/{cmd_name} "
+                        for _dict in cmd_opts:
+                            if isinstance(_dict, list):
+                                for _dict_ in _dict:
+                                    _type = typer_dict(_dict_["type"])
+                                    how_to_use += f"[{_dict_['name']}: {'optional ' if not _dict_['required'] else ''}{_type}], "
+                            else:
+                                _type = typer_dict(_dict["type"])
+                                how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
+                        how_to_use = (
+                            how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
+                        )
+                        how_to_use += "\n```"
+                        embed2.add_field(
+                            name=cmd_name, value=desc + how_to_use, inline=False
+                        )
+                    if self.footer is not None:
+                        embed2.set_footer(text=self.footer)
+                    pages.append(embed2)
+            await Paginator(
+                self.bot,
+                ctx,
+                pages,
+                timeout=self.timeout,
+                useFirstLast=self.extended_buttons,
+                useSelect=self.use_select,
+            ).run()
