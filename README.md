@@ -5,7 +5,7 @@ Join our [Discord server](https://discord.gg/Sk5qDBGPsQ) to ask questions, repor
 
 ## Example:
 
-<img src="https://cdn.discordapp.com/attachments/891048087542444072/891093180278272020/5wJT9vEZ3R.gif"></img>
+<img src="https://cdn.discordapp.com/attachments/890021074337660959/891838520077987870/SHHyts4lPZ.gif"></img>
 
 ## Usage:
 ```py
@@ -42,3 +42,5 @@ pip install -U slash-help
 - `no_category_description`: `Optional[str] = "No description"` - value for the No Category field
 - `extended_buttons`: `Optional[bool] = True` - to use the first and last buttons
 - `use_select`: `Optional[bool] = True` - whether to use the select
+- `use_subcommand`: `Optional[bool] = False` - to have a subcommand `/help bot_name`
+- `bot_name`: `Optional[str] = None` - needed to use `use_subcommand`
