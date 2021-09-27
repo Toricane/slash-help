@@ -4,11 +4,11 @@ from discord_slash import SlashContext, SlashCommand
 from discord import Embed, Colour, Color
 from discord import Client
 from discord.ext.commands import Bot
+from discord.ext.commands import GroupMixin
 
 from dinteractions_Paginator import Paginator
 
 from typing import Union, Optional, List
-import asyncio
 from re import search
 
 from .errors import CommandsNotFound, NameNeeded, IncorrectName
@@ -84,6 +84,7 @@ class SlashHelp:
         use_select: Optional[bool] = True,
         use_subcommand: Optional[bool] = False,
         bot_name: Optional[str] = None,
+        dpy_command: Optional[bool] = False,
     ) -> None:
         self.bot = bot
         self.slash = slash
@@ -104,6 +105,7 @@ class SlashHelp:
         self.use_select = use_select
         self.use_subcommand = use_subcommand
         self.bot_name = bot_name
+        self.dpy_command = dpy_command
 
         if not self.use_subcommand:
             self.slash.add_slash_command(
@@ -127,6 +129,11 @@ class SlashHelp:
                 options=[create_option("command", "What command?", 3, False)],
                 guild_ids=self.guild_ids,
             )
+        if self.dpy_command:
+
+            @GroupMixin.command(bot, name="help")
+            async def _help(ctx, *, command=None):
+                await self.send_help(ctx, command)
 
     async def send_help(self, ctx: SlashContext, command: Optional[str] = None) -> None:
         commands, subcommands = await async_separated(self)
