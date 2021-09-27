@@ -44,3 +44,4 @@ pip install -U slash-help
 - `use_select`: `Optional[bool] = True` - whether to use the select
 - `use_subcommand`: `Optional[bool] = False` - to have a subcommand `/help bot_name`
 - `bot_name`: `Optional[str] = None` - needed to use `use_subcommand`
+- `dpy_command`: `Optional[bool] = False` - whether to make a discord.py command as well
