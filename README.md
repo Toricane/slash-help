@@ -5,7 +5,7 @@ Join our [Discord server](https://discord.gg/Sk5qDBGPsQ) to ask questions, repor
 
 ## Example:
 
-<img src="https://cdn.discordapp.com/attachments/890021074337660959/891838520077987870/SHHyts4lPZ.gif"></img>
+<img src="https://cdn.discordapp.com/attachments/890021074337660959/892234943009271829/nKPDqSBXRj.gif"></img>
 
 ## Usage:
 ```py
@@ -19,7 +19,7 @@ slash_help = SlashHelp(bot, slash)
 # and its done!
 ```
 ## Install:
-```
+```bash
 pip install -U slash-help
 ```
 
@@ -36,7 +36,7 @@ pip install -U slash-help
 - `color`: `Optional[discord.Color] = discord.Color.default()` - the color of the embed
 - `colour` - alias of `color`
 - `timeout`: `Optional[int] = 60` - the number of seconds till paginator timeout, specify `None` for no timeout
-- `fields_per_embed`: `Optional[int] = 5` - the number of fields per embed
+- `fields_per_embed`: `Optional[int] = 4` - the number of fields per embed
 - `footer`: `Optional[str] = None` - footer for the embeds
 - `front_description`: `Optional[str] = None` - description in the first embed
 - `no_category_description`: `Optional[str] = "No description"` - value for the No Category field
