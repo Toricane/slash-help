@@ -14,7 +14,7 @@ from re import search
 from .errors import CommandsNotFound, NameNeeded, IncorrectName
 
 
-def typer_dict(_type) -> str:
+def typer_dict(_type, choices=None) -> str:
     _typer_dict = {
         1: "sub_command",
         2: "sub_command_group",
@@ -27,7 +27,7 @@ def typer_dict(_type) -> str:
         9: "mentionable",
         10: "float",
     }
-    return _typer_dict[_type]
+    return _typer_dict[_type] if choices == [] else "choices"
 
 
 async def get_all_commands(slash):
@@ -76,7 +76,7 @@ class SlashHelp:
         color: Optional[Color] = Color.default(),
         colour: Optional[Colour] = Colour.default(),
         timeout: Optional[int] = 60,
-        fields_per_embed: Optional[int] = 5,
+        fields_per_embed: Optional[int] = 4,
         footer: Optional[str] = None,
         front_description: Optional[str] = None,
         no_category_description: Optional[str] = "No description",
@@ -254,26 +254,45 @@ class SlashHelp:
             matches = []
             matches_desc = []
             matches_opt = []
+            matches_cog = []
             matches_embeds = []
+            cog_matches = []
+            cog_matches_desc = []
             for _cog in cogs.keys():
+                if command.lower() in _cog.lower() and not _cog == "No Category":
+                    cog_matches.append(_cog)
+                    cog_matches_desc.append(cog_descs[_cog])
                 for lst in cogs[_cog]:
                     if command in lst[0]:
                         matches.append(lst[0])
                         matches_desc.append(lst[1])
                         matches_opt.append(lst[2])
-            if len(matches) == 0:
+                        matches_cog.append(_cog)
+            if len(matches) == 0 and len(cog_matches) == 0:
                 await ctx.send(
                     "No matches found. Please try searching something different!"
                 )
                 return
-            for i in range(0, len(matches), self.fields_per_embed):
+            for i in range(0, (len(matches) + len(cog_matches)), self.fields_per_embed):
                 embed1 = Embed(
                     title=f"Results for `{command}`",
                     description=f"Search results {i + 1} - {i + self.fields_per_embed}",
                     colour=self.colour,
                 )
-                for match in matches[i : (i + self.fields_per_embed)]:
-                    usage = f"{matches_desc[matches.index(match)][0] if isinstance(matches_desc[matches.index(match)], list) else matches_desc[matches.index(match)]}\nHow to use:"
+                remainder = i + self.fields_per_embed
+                for match in cog_matches[i : (i + self.fields_per_embed)]:
+                    value1 = f"Category\n{cog_matches_desc[cog_matches.index(match)]}\nCommands:\n"
+                    for cmd in cogs[match]:
+                        value1 += f"`/{cmd[0]}`, "
+                    value1 = value1[:-2] if value1.endswith(", ") else value1
+                    embed1.add_field(
+                        name=match,
+                        value=value1,
+                        inline=False,
+                    )
+                    remainder -= 1
+                for match in matches[i:remainder]:
+                    usage = f"Command\n{self.no_category_description if matches_cog[matches.index(match)] == 'No Category' else f'In {matches_cog[matches.index(match)]}'}\n{matches_desc[matches.index(match)][0] if isinstance(matches_desc[matches.index(match)], list) else matches_desc[matches.index(match)]}\nHow to use:"
                     how_to_use = f"\n```\n/{match} "
                     for _dict in matches_opt[matches.index(match)]:
                         if isinstance(_dict, list):
@@ -281,7 +300,7 @@ class SlashHelp:
                                 _type = typer_dict(_dict_["type"])
                                 how_to_use += f"[{_dict_['name']}: {'optional ' if not _dict_['required'] else ''}{_type}], "
                         else:
-                            _type = typer_dict(_dict["type"])
+                            _type = typer_dict(_dict["type"], _dict["choices"])
                             how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
                     how_to_use = (
                         how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
@@ -289,6 +308,8 @@ class SlashHelp:
                     how_to_use += "\n```"
                     usage += how_to_use
                     embed1.add_field(name=match, value=usage, inline=False)
+                if self.footer is not None:
+                    embed1.set_footer(text=self.footer)
                 matches_embeds.append(embed1)
             if len(matches_embeds) == 1:
                 await ctx.send(embed=matches_embeds[0])
