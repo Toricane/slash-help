@@ -79,9 +79,11 @@ class SlashHelp:
         fields_per_embed: Optional[int] = 4,
         footer: Optional[str] = None,
         front_description: Optional[str] = None,
+        no_category_name: Optional[str] = "No Category",
         no_category_description: Optional[str] = "No description",
         extended_buttons: Optional[bool] = True,
         use_select: Optional[bool] = True,
+        author_only: Optional[bool] = False,
         use_subcommand: Optional[bool] = False,
         bot_name: Optional[str] = None,
         dpy_command: Optional[bool] = False,
@@ -100,9 +102,11 @@ class SlashHelp:
         self.fields_per_embed = fields_per_embed
         self.footer = footer
         self.front_description = front_description
+        self.no_category_name = no_category_name
         self.no_category_description = no_category_description
         self.extended_buttons = extended_buttons
         self.use_select = use_select
+        self.author_only = author_only
         self.use_subcommand = use_subcommand
         self.bot_name = bot_name
         self.dpy_command = dpy_command
@@ -141,14 +145,18 @@ class SlashHelp:
         cog_descs = {}
         for command_ in commands:
             the_cog = getattr(self.slash.commands[command_["name"]], "cog", None)
-            cog_name = "No Category" if the_cog is None else the_cog.qualified_name
+            cog_name = (
+                self.no_category_name if the_cog is None else the_cog.qualified_name
+            )
             cogs[cog_name] = []
             cog_descs[cog_name] = (
                 "No description" if the_cog is None else the_cog.description
             )
         for command_ in commands:
             the_cog = getattr(self.slash.commands[command_["name"]], "cog", None)
-            cog_name = "No Category" if the_cog is None else the_cog.qualified_name
+            cog_name = (
+                self.no_category_name if the_cog is None else the_cog.qualified_name
+            )
             cogs[cog_name].append(
                 [command_["name"], command_["description"], command_["options"]]
             )
@@ -169,7 +177,9 @@ class SlashHelp:
                         self.slash.subcommands[base][sub_command], "cog", None
                     )
                     cog_name = (
-                        "No Category" if the_cog is None else the_cog.qualified_name
+                        self.no_category_name
+                        if the_cog is None
+                        else the_cog.qualified_name
                     )
                     if cog_name not in cogs.keys():
                         cogs[cog_name] = []
@@ -187,7 +197,9 @@ class SlashHelp:
                             None,
                         )
                         cog_name = (
-                            "No Category" if the_cog is None else the_cog.qualified_name
+                            self.no_category_name
+                            if the_cog is None
+                            else the_cog.qualified_name
                         )
                         if cog_name not in cogs.keys():
                             cogs[cog_name] = []
@@ -221,7 +233,9 @@ class SlashHelp:
                         self.slash.subcommands[base][sub_command], "cog", None
                     )
                     cog_name = (
-                        "No Category" if the_cog is None else the_cog.qualified_name
+                        self.no_category_name
+                        if the_cog is None
+                        else the_cog.qualified_name
                     )
                     cogs[cog_name].append(
                         [
@@ -241,7 +255,9 @@ class SlashHelp:
                             None,
                         )
                         cog_name = (
-                            "No Category" if the_cog is None else the_cog.qualified_name
+                            self.no_category_name
+                            if the_cog is None
+                            else the_cog.qualified_name
                         )
                         cogs[cog_name].append(
                             [
@@ -250,7 +266,18 @@ class SlashHelp:
                                 sub_command_group_opts,
                             ]
                         )
+        if self.dpy_command:
+            same = {}
+            for cmd in self.bot.commands:
+                for cmds in cogs.values():
+                    if cmd.name in cmds[0]:
+                        same[cmd.name] = {
+                            "cmd": cmd,
+                            "name": cmd.name,
+                            "cog": cmd.cog_name,
+                        }
         if command is not None:
+            command = command[1:] if command.startswith("/") else command
             matches = []
             matches_desc = []
             matches_opt = []
@@ -259,7 +286,10 @@ class SlashHelp:
             cog_matches = []
             cog_matches_desc = []
             for _cog in cogs.keys():
-                if command.lower() in _cog.lower() and not _cog == "No Category":
+                if (
+                    command.lower() in _cog.lower()
+                    and not _cog == self.no_category_name
+                ):
                     cog_matches.append(_cog)
                     cog_matches_desc.append(cog_descs[_cog])
                 for lst in cogs[_cog]:
@@ -292,12 +322,17 @@ class SlashHelp:
                     )
                     remainder -= 1
                 for match in matches[i:remainder]:
-                    usage = f"Command\n{self.no_category_description if matches_cog[matches.index(match)] == 'No Category' else f'In {matches_cog[matches.index(match)]}'}\n{matches_desc[matches.index(match)][0] if isinstance(matches_desc[matches.index(match)], list) else matches_desc[matches.index(match)]}\nHow to use:"
+                    theres_dpy = "\n"
+                    if self.dpy_command and match in same.keys():
+                        theres_dpy = (
+                            f"\nYou can also use `{self.bot.command_prefix}{match}`"
+                        )
+                    usage = f"Command\nIn {self.no_category_description if matches_cog[matches.index(match)] == 'No Category' else f'In {matches_cog[matches.index(match)]}'}\n{matches_desc[matches.index(match)][0] if isinstance(matches_desc[matches.index(match)], list) else matches_desc[matches.index(match)]}{theres_dpy}\nHow to use:"
                     how_to_use = f"\n```\n/{match} "
                     for _dict in matches_opt[matches.index(match)]:
                         if isinstance(_dict, list):
                             for _dict_ in _dict:
-                                _type = typer_dict(_dict_["type"])
+                                _type = typer_dict(_dict_["type"], _dict_["choices"])
                                 how_to_use += f"[{_dict_['name']}: {'optional ' if not _dict_['required'] else ''}{_type}], "
                         else:
                             _type = typer_dict(_dict["type"], _dict["choices"])
@@ -321,6 +356,7 @@ class SlashHelp:
                     timeout=self.timeout,
                     useFirstLast=self.extended_buttons,
                     useSelect=self.use_select,
+                    authorOnly=self.author_only,
                 ).run()
         else:
             first_page = (
@@ -344,7 +380,7 @@ class SlashHelp:
                     embed2 = Embed(
                         title=f"{_cog} {i + 1} - {i + self.fields_per_embed}",
                         description=self.no_category_description
-                        if _cog == "No Category"
+                        if _cog == self.no_category_name
                         else cog_descs[_cog],
                         colour=self.colour,
                     )
@@ -352,21 +388,32 @@ class SlashHelp:
                         cmd_name = cmd[0]
                         cmd_desc = cmd[1]
                         cmd_opts = cmd[2]
+                        theres_dpy = "\n"
+                        if self.dpy_command and cmd_name in same.keys():
+                            theres_dpy = f"\nYou can also use `{self.bot.command_prefix}{cmd_name}`\n"
                         desc = (
-                            "No description"
-                            if (cmd_desc is None or cmd_desc == [])
-                            else (
-                                cmd_desc[0] if isinstance(cmd_desc, list) else cmd_desc
+                            (
+                                "No description"
+                                if (cmd_desc is None or cmd_desc == [])
+                                else (
+                                    cmd_desc[0]
+                                    if isinstance(cmd_desc, list)
+                                    else cmd_desc
+                                )
                             )
-                        ) + "\nHow to use:"
+                            + theres_dpy
+                            + "How to use:"
+                        )
                         how_to_use = f"\n```\n/{cmd_name} "
                         for _dict in cmd_opts:
                             if isinstance(_dict, list):
                                 for _dict_ in _dict:
-                                    _type = typer_dict(_dict_["type"])
+                                    _type = typer_dict(
+                                        _dict_["type"], _dict_["choices"]
+                                    )
                                     how_to_use += f"[{_dict_['name']}: {'optional ' if not _dict_['required'] else ''}{_type}], "
                             else:
-                                _type = typer_dict(_dict["type"])
+                                _type = typer_dict(_dict["type"], _dict["choices"])
                                 how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
                         how_to_use = (
                             how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
@@ -385,4 +432,5 @@ class SlashHelp:
                 timeout=self.timeout,
                 useFirstLast=self.extended_buttons,
                 useSelect=self.use_select,
+                authorOnly=self.author_only,
             ).run()
