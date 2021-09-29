@@ -8,7 +8,7 @@ Join our [Discord server](https://discord.gg/Sk5qDBGPsQ) to ask questions, repor
 
 ## Example:
 
-<img src="https://cdn.discordapp.com/attachments/890021074337660959/892234943009271829/nKPDqSBXRj.gif"></img>
+<img src="https://cdn.discordapp.com/attachments/890021074337660959/892595756907786270/B9fVWuVhSe.gif"></img>
 
 ## Usage:
 ```py
