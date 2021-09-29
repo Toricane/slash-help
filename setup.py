@@ -1,10 +1,11 @@
 from setuptools import setup
-with open("README.md","r",encoding="utf-8") as fh:
-    long_description=fh.read()
+
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
 
 setup(
     name="slash_help",
-    version="1.4.0",
+    version="1.4.1",
     description="Slash commands help for discord-interactions",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -19,5 +20,9 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    install_requires=["discord-py-interactions", "discord.py", "dinteractions-Paginator"],
+    install_requires=[
+        "discord-py-interactions",
+        "discord.py",
+        "dinteractions-Paginator",
+    ],
 )
