@@ -4,11 +4,11 @@ with open("README.md","r",encoding="utf-8") as fh:
 
 setup(
     name="slash_help",
-    version="1.3.0",
+    version="1.4.0",
     description="Slash commands help for discord-interactions",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/Toricane/SlashHelp",
+    url="https://github.com/Toricane/slash-help",
     author="Toricane",
     author_email="prjwl028@gmail.com",
     license="MIT",
