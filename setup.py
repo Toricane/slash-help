@@ -5,8 +5,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="slash_help",
-    version="1.4.1",
-    description="Slash commands help for discord-interactions",
+    version="1.4.2",
+    description="discord-interactions slash command help",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Toricane/slash-help",
@@ -17,7 +17,7 @@ setup(
     classifiers=[
         "Programming Language :: Python :: 3",
         "Development Status :: 4 - Beta",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Operating System :: OS Independent",
     ],
     install_requires=[
