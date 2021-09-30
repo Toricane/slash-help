@@ -1,6 +1,6 @@
 # slash-help
 
-<img src="https://cdn.discordapp.com/attachments/892533425272131585/892564503953281034/slash-help.gif" alt="slash-help gif"></img>
+<img src="https://cdn.discordapp.com/attachments/890021074337660959/892945393988554782/new-slash-help-gif.gif" alt="slash-help gif"></img>
 
 discord-interactions slash command help
 
