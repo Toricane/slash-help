@@ -12,7 +12,7 @@ setup(
     url="https://github.com/Toricane/slash-help",
     author="Toricane",
     author_email="prjwl028@gmail.com",
-    license="MIT",
+    license="GNU",
     packages=["slash_help"],
     classifiers=[
         "Programming Language :: Python :: 3",
