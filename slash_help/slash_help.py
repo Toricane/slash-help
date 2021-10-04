@@ -141,6 +141,8 @@ class SlashHelp:
 
     async def send_help(self, ctx: SlashContext, command: Optional[str] = None) -> None:
         commands, subcommands = await async_separated(self)
+        if self.dpy_command:
+            dpycmds = self.bot.commands
         cogs = {}
         cog_descs = {}
         for command_ in commands:
@@ -150,8 +152,23 @@ class SlashHelp:
             )
             cogs[cog_name] = []
             cog_descs[cog_name] = (
-                "No description" if the_cog is None else the_cog.description
+                self.no_category_name if the_cog is None else the_cog.description
             )
+        if self.dpy_command:
+            for command_ in dpycmds:
+                if not command_.hidden:
+                    the_cog = command_.cog
+                    cog_name = (
+                        self.no_category_name
+                        if the_cog is None
+                        else the_cog.qualified_name
+                    )
+                    cogs[cog_name] = []
+                    cog_descs[cog_name] = (
+                        self.no_category_description
+                        if the_cog is None
+                        else the_cog.description
+                    )
         for command_ in commands:
             the_cog = getattr(self.slash.commands[command_["name"]], "cog", None)
             cog_name = (
@@ -160,6 +177,18 @@ class SlashHelp:
             cogs[cog_name].append(
                 [command_["name"], command_["description"], command_["options"]]
             )
+        if self.dpy_command:
+            for command_ in dpycmds:
+                if not command_.hidden:
+                    the_cog = command_.cog
+                    cog_name = (
+                        self.no_category_name
+                        if the_cog is None
+                        else the_cog.qualified_name
+                    )
+                    cogs[cog_name].append(
+                        [command_.name, command_.description, command_.signature]
+                    )
         for subcommand in subcommands:
             base = subcommand["name"]
             sub_command_groups = []
@@ -269,13 +298,14 @@ class SlashHelp:
         if self.dpy_command:
             same = {}
             for cmd in self.bot.commands:
-                for cmds in cogs.values():
-                    if cmd.name in cmds[0]:
-                        same[cmd.name] = {
-                            "cmd": cmd,
-                            "name": cmd.name,
-                            "cog": cmd.cog_name,
-                        }
+                if not cmd.hidden:
+                    for cmds in cogs.values():
+                        if cmd.name in cmds[0]:
+                            same[cmd.name] = {
+                                "cmd": cmd,
+                                "name": cmd.name,
+                                "cog": cmd.cog_name,
+                            }
         if command is not None:
             command = command[1:] if command.startswith("/") else command
             matches = []
@@ -304,6 +334,7 @@ class SlashHelp:
                 )
                 return
             for i in range(0, (len(matches) + len(cog_matches)), self.fields_per_embed):
+                start_at = i - 1
                 embed1 = Embed(
                     title=f"Results for `{command}`",
                     description=f"Search results {i + 1} - {i + self.fields_per_embed}",
@@ -311,7 +342,7 @@ class SlashHelp:
                 )
                 remainder = i + self.fields_per_embed
                 for match in cog_matches[i : (i + self.fields_per_embed)]:
-                    value1 = f"Category\n{cog_matches_desc[cog_matches.index(match)]}\nCommands:\n"
+                    value1 = f"Category\n{cog_matches_desc[cog_matches[i : (i + self.fields_per_embed)].index(match, start_at + 1)]}\nCommands:\n"
                     for cmd in cogs[match]:
                         value1 += f"`/{cmd[0]}`, "
                     value1 = value1[:-2] if value1.endswith(", ") else value1
@@ -321,28 +352,35 @@ class SlashHelp:
                         inline=False,
                     )
                     remainder -= 1
+                    start_at = cog_matches[i : (i + self.fields_per_embed)].index(
+                        match, start_at + 1
+                    )
+                start_at = i - 1
                 for match in matches[i:remainder]:
-                    theres_dpy = "\n"
+                    theres_dpy = ""
                     if self.dpy_command and match in same.keys():
-                        theres_dpy = (
-                            f"\nYou can also use `{self.bot.command_prefix}{match}`"
-                        )
-                    usage = f"Command\nIn {self.no_category_description if matches_cog[matches.index(match)] == 'No Category' else f'In {matches_cog[matches.index(match)]}'}\n{matches_desc[matches.index(match)][0] if isinstance(matches_desc[matches.index(match)], list) else matches_desc[matches.index(match)]}{theres_dpy}\nHow to use:"
-                    how_to_use = f"\n```\n/{match} "
-                    for _dict in matches_opt[matches.index(match)]:
+                        theres_dpy = f"You can also use `{self.bot.command_prefix if not isinstance(matches_opt[matches[i:remainder].index(match, start_at + 1)], (str, type(None))) else '/'}{match}`"
+                    usage = f"Command\nIn {self.no_category_description if matches_cog[matches[i:remainder].index(match, start_at + 1)] == self.no_category_name else f'In {matches_cog[matches[i:remainder].index(match, start_at + 1)]}'}\n{matches_desc[matches[i:remainder].index(match, start_at + 1)][0] if isinstance(matches_desc[matches[i:remainder].index(match, start_at + 1)], list) else matches_desc[matches[i:remainder].index(match, start_at + 1)] if matches_desc[matches[i:remainder].index(match, start_at + 1)] != '' else 'No Description.'}\n{theres_dpy}\nHow to use:"
+                    how_to_use = f"\n```\n{'/' if not isinstance(matches_opt[matches[i:remainder].index(match, start_at + 1)], (str, type(None))) else self.bot.command_prefix}{match} "
+                    for _dict in matches_opt[
+                        matches[i:remainder].index(match, start_at + 1)
+                    ]:
                         if isinstance(_dict, list):
                             for _dict_ in _dict:
                                 _type = typer_dict(_dict_["type"], _dict_["choices"])
                                 how_to_use += f"[{_dict_['name']}: {'optional ' if not _dict_['required'] else ''}{_type}], "
-                        else:
+                        elif isinstance(_dict, dict):
                             _type = typer_dict(_dict["type"], _dict["choices"])
                             how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
+                        elif isinstance(_dict, str):
+                            how_to_use += _dict
                     how_to_use = (
                         how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
                     )
                     how_to_use += "\n```"
                     usage += how_to_use
                     embed1.add_field(name=match, value=usage, inline=False)
+                    start_at = matches[i:remainder].index(match, start_at + 1)
                 if self.footer is not None:
                     embed1.set_footer(text=self.footer)
                 matches_embeds.append(embed1)
@@ -390,11 +428,17 @@ class SlashHelp:
                         cmd_opts = cmd[2]
                         theres_dpy = "\n"
                         if self.dpy_command and cmd_name in same.keys():
-                            theres_dpy = f"\nYou can also use `{self.bot.command_prefix}{cmd_name}`\n"
+                            theres_dpy = (
+                                f"\nYou can also use `{self.bot.command_prefix}{cmd_name}`\n"
+                                if not isinstance(cmd_opts, (str, type(None)))
+                                else f"\nYou can also use `/{cmd_name}`\n"
+                            )
                         desc = (
                             (
                                 "No description"
-                                if (cmd_desc is None or cmd_desc == [])
+                                if (
+                                    cmd_desc is None or cmd_desc == [] or cmd_desc == ""
+                                )
                                 else (
                                     cmd_desc[0]
                                     if isinstance(cmd_desc, list)
@@ -404,17 +448,22 @@ class SlashHelp:
                             + theres_dpy
                             + "How to use:"
                         )
-                        how_to_use = f"\n```\n/{cmd_name} "
-                        for _dict in cmd_opts:
-                            if isinstance(_dict, list):
-                                for _dict_ in _dict:
-                                    _type = typer_dict(
-                                        _dict_["type"], _dict_["choices"]
-                                    )
-                                    how_to_use += f"[{_dict_['name']}: {'optional ' if not _dict_['required'] else ''}{_type}], "
-                            else:
-                                _type = typer_dict(_dict["type"], _dict["choices"])
-                                how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
+                        how_to_use = f"\n```\n{'/' if not isinstance(cmd_opts, (str, type(None))) else self.bot.command_prefix}{cmd_name} "
+                        if not isinstance(cmd_opts, (str, type(None))):
+                            for _dict in cmd_opts:
+                                if isinstance(_dict, list):
+                                    for _dict_ in _dict:
+                                        _type = typer_dict(
+                                            _dict_["type"], _dict_["choices"]
+                                        )
+                                        how_to_use += f"[{_dict_['name']}: {'optional ' if not _dict_['required'] else ''}{_type}], "
+                                else:
+                                    _type = typer_dict(_dict["type"], _dict["choices"])
+                                    how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
+                        elif cmd_opts is None:
+                            pass
+                        else:
+                            how_to_use += cmd_opts
                         how_to_use = (
                             how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
                         )
