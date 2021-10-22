@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="slash_help",
-    version="1.5.0",
+    version="2.0.0",
     description="discord-interactions slash command help",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -24,5 +24,7 @@ setup(
         "discord-py-interactions",
         "discord.py",
         "dinteractions-Paginator",
+        "thefuzz",
+        "Levenshtein",
     ],
 )
