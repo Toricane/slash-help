@@ -1,4 +1,4 @@
-from discord_slash.utils.manage_commands import create_option
+from discord_slash.utils.manage_commands import create_option, get_all_commands
 from discord_slash import SlashContext, SlashCommand
 
 from discord import Embed, Colour, Color
@@ -10,6 +10,7 @@ from dinteractions_Paginator import Paginator
 
 from typing import Union, Optional, List
 from re import search
+from thefuzz.fuzz import ratio
 
 from .errors import CommandsNotFound, NameNeeded, IncorrectName
 
@@ -27,43 +28,7 @@ def typer_dict(_type, choices=None) -> str:
         9: "mentionable",
         10: "float",
     }
-    return _typer_dict[_type] if choices == [] else "choices"
-
-
-async def get_all_commands(slash):
-    return await slash.to_dict()
-
-
-async def async_all_commands(self):
-    result = await self.slash.to_dict()
-    if result["global"]:  # if there are global commands
-        return result["global"]
-    elif result["guild"] and self.guild_ids is not None:  # if there are guild commands
-        guild_has_commands = False
-        guild_with_commands = None
-        for guild_id in self.guild_ids:
-            if result["guild"][guild_id]:
-                guild_has_commands = True
-                guild_with_commands = guild_id
-                break
-        if not guild_has_commands:  # no commands in specified guild
-            raise CommandsNotFound
-        return result["guild"][guild_with_commands]
-    else:  # if there are no commands
-        raise CommandsNotFound
-
-
-async def async_separated(self):
-    _all_commands = await async_all_commands(self)
-    commands = []
-    subcommands = []
-    for command in _all_commands:
-        if command["options"]:
-            if command["options"][0]["type"] in (1, 2):
-                subcommands.append(command)
-                continue
-        commands.append(command)
-    return [commands, subcommands]
+    return _typer_dict[_type] if choices == [] or choices is None else "choices"
 
 
 class SlashHelp:
@@ -71,6 +36,7 @@ class SlashHelp:
         self,
         bot: Union[Bot, Client],
         slash: SlashCommand,
+        token: str,
         guild_ids: Optional[List[int]] = None,
         *,
         color: Optional[Color] = Color.default(),
@@ -87,9 +53,14 @@ class SlashHelp:
         use_subcommand: Optional[bool] = False,
         bot_name: Optional[str] = None,
         dpy_command: Optional[bool] = False,
+        max_search_results: Optional[int] = 12,
+        sync_commands: Optional[bool] = False,
+        blacklist: Optional[List[str]] = None,
+        prefix: Optional[str] = None,
     ) -> None:
         self.bot = bot
         self.slash = slash
+        self.token = token
         self.guild_ids = guild_ids
         self.colour = (
             colour
@@ -110,6 +81,12 @@ class SlashHelp:
         self.use_subcommand = use_subcommand
         self.bot_name = bot_name
         self.dpy_command = dpy_command
+        self.max_search_results = max_search_results
+        self.sync_commands = sync_commands
+        self.blacklist = blacklist
+        self.prefix = prefix
+
+        self.data = None
 
         if not self.use_subcommand:
             self.slash.add_slash_command(
@@ -139,263 +116,178 @@ class SlashHelp:
             async def _help(ctx, *, command=None):
                 await self.send_help(ctx, command)
 
-    async def send_help(self, ctx: SlashContext, command: Optional[str] = None) -> None:
-        commands, subcommands = await async_separated(self)
-        if self.dpy_command:
-            dpycmds = self.bot.commands
-        cogs = {}
-        cog_descs = {}
-        for command_ in commands:
-            the_cog = getattr(self.slash.commands[command_["name"]], "cog", None)
-            cog_name = (
-                self.no_category_name if the_cog is None else the_cog.qualified_name
-            )
-            cogs[cog_name] = []
-            cog_descs[cog_name] = (
-                self.no_category_name if the_cog is None else the_cog.description
-            )
-        if self.dpy_command:
-            for command_ in dpycmds:
-                if not command_.hidden:
-                    the_cog = command_.cog
-                    cog_name = (
-                        self.no_category_name
-                        if the_cog is None
-                        else the_cog.qualified_name
-                    )
-                    cogs[cog_name] = []
-                    cog_descs[cog_name] = (
-                        self.no_category_description
-                        if the_cog is None
-                        else the_cog.description
-                    )
-        for command_ in commands:
-            the_cog = getattr(self.slash.commands[command_["name"]], "cog", None)
-            cog_name = (
-                self.no_category_name if the_cog is None else the_cog.qualified_name
-            )
-            cogs[cog_name].append(
-                [command_["name"], command_["description"], command_["options"]]
-            )
-        if self.dpy_command:
-            for command_ in dpycmds:
-                if not command_.hidden:
-                    the_cog = command_.cog
-                    cog_name = (
-                        self.no_category_name
-                        if the_cog is None
-                        else the_cog.qualified_name
-                    )
-                    cogs[cog_name].append(
-                        [command_.name, command_.description, command_.signature]
-                    )
-        for subcommand in subcommands:
-            base = subcommand["name"]
-            sub_command_groups = []
-            sub_commands = []
-            sub_command_group_name = []
-            for option in subcommand["options"]:
-                if option["type"] == 1:
-                    sub_commands.append(option["name"])
-                elif option["type"] == 2:
-                    sub_command_groups.append(option["name"])
-                    sub_command_group_name.append(option["options"][0]["name"])
-            if sub_commands:
-                for sub_command in sub_commands:
-                    the_cog = getattr(
-                        self.slash.subcommands[base][sub_command], "cog", None
-                    )
-                    cog_name = (
-                        self.no_category_name
-                        if the_cog is None
-                        else the_cog.qualified_name
-                    )
-                    if cog_name not in cogs.keys():
-                        cogs[cog_name] = []
-                        cog_descs[cog_name] = (
-                            "No description" if the_cog is None else the_cog.description
-                        )
-            if sub_command_groups:
-                for sub_command_group in sub_command_groups:
-                    for sub_command in sub_command_group_name:
-                        the_cog = getattr(
-                            self.slash.subcommands[base][sub_command_group][
-                                sub_command
-                            ],
-                            "cog",
-                            None,
-                        )
-                        cog_name = (
-                            self.no_category_name
-                            if the_cog is None
-                            else the_cog.qualified_name
-                        )
-                        if cog_name not in cogs.keys():
-                            cogs[cog_name] = []
-                            cog_descs[cog_name] = (
-                                "No description"
-                                if the_cog is None
-                                else the_cog.description
-                            )
-        for subcommand in subcommands:
-            base = subcommand["name"]
-            sub_command_groups = []
-            sub_commands = []
-            sub_command_descs = []
-            sub_command_opts = []
-            sub_command_group_name = []
-            sub_command_group_descs = []
-            sub_command_group_opts = []
-            for option in subcommand["options"]:
-                if option["type"] == 1:
-                    sub_commands.append(option["name"])
-                    sub_command_descs.append(option["description"])
-                    sub_command_opts.append(option["options"])
-                elif option["type"] == 2:
-                    sub_command_groups.append(option["name"])
-                    sub_command_group_name.append(option["options"][0]["name"])
-                    sub_command_group_descs.append(option["options"][0]["description"])
-                    sub_command_group_opts.append(option["options"][0]["options"])
-            if sub_commands:
-                for sub_command in sub_commands:
-                    the_cog = getattr(
-                        self.slash.subcommands[base][sub_command], "cog", None
-                    )
-                    cog_name = (
-                        self.no_category_name
-                        if the_cog is None
-                        else the_cog.qualified_name
-                    )
-                    cogs[cog_name].append(
-                        [
-                            f"{base} {sub_command}",
-                            sub_command_descs,
-                            sub_command_opts,
-                        ]
-                    )
-            if sub_command_groups:
-                for sub_command_group in sub_command_groups:
-                    for sub_command in sub_command_group_name:
-                        the_cog = getattr(
-                            self.slash.subcommands[base][sub_command_group][
-                                sub_command
-                            ],
-                            "cog",
-                            None,
-                        )
-                        cog_name = (
-                            self.no_category_name
-                            if the_cog is None
-                            else the_cog.qualified_name
-                        )
-                        cogs[cog_name].append(
-                            [
-                                f"{base} {sub_command_group} {sub_command}",
-                                sub_command_group_descs,
-                                sub_command_group_opts,
-                            ]
-                        )
-        if self.dpy_command:
-            same = {}
-            for cmd in self.bot.commands:
-                if not cmd.hidden:
-                    for cmds in cogs.values():
-                        if cmd.name in cmds[0]:
-                            same[cmd.name] = {
-                                "cmd": cmd,
-                                "name": cmd.name,
-                                "cog": cmd.cog_name,
+    async def send_help(
+        self,
+        ctx: SlashContext,
+        command: Optional[str] = None,
+        prefix: Optional[str] = None,
+    ) -> None:
+        if prefix is not None:
+            self.prefix = prefix
+        duplicates = {}
+        if self.data is None or self.sync_commands:
+            self.data = await self.async_separated()
+            if self.dpy_command:
+                dpycmds = self.bot.commands
+                for dcmd in dpycmds:
+                    if not dcmd.hidden:
+                        for interaction in self.data:
+                            in_blacklist = False
+                            if self.blacklist:
+                                for black in self.blacklist:
+                                    if black in interaction["name"]:
+                                        in_blacklist = True
+                                        break
+                            if in_blacklist:
+                                continue
+                            if dcmd.name == interaction["name"]:
+                                duplicates[dcmd.name] = {
+                                    "cmd": dcmd,
+                                    "name": dcmd.name,
+                                    "cog": dcmd.qualified_name,
+                                }
+                        self.data.append(
+                            {
+                                "name": dcmd.name,
+                                "description": dcmd.description,
+                                "options": dcmd.signature,
+                                "type": "message command",
+                                "cog": {
+                                    "name": self.no_category_name
+                                    if dcmd.cog is None
+                                    else dcmd.cog.qualified_name,
+                                    "description": self.no_category_description
+                                    if dcmd.cog is None
+                                    else dcmd.cog.description,
+                                },
                             }
-        if command is not None:
-            command = command[1:] if command.startswith("/") else command
-            matches = []
-            matches_desc = []
-            matches_opt = []
-            matches_cog = []
-            matches_embeds = []
-            cog_matches = []
-            cog_matches_desc = []
-            for _cog in cogs.keys():
-                if (
-                    command.lower() in _cog.lower()
-                    and not _cog == self.no_category_name
-                ):
-                    cog_matches.append(_cog)
-                    cog_matches_desc.append(cog_descs[_cog])
-                for lst in cogs[_cog]:
-                    if command in lst[0]:
-                        matches.append(lst[0])
-                        matches_desc.append(lst[1])
-                        matches_opt.append(lst[2])
-                        matches_cog.append(_cog)
-            if len(matches) == 0 and len(cog_matches) == 0:
-                await ctx.send(
-                    "No matches found. Please try searching something different!"
-                )
-                return
-            for i in range(0, (len(matches) + len(cog_matches)), self.fields_per_embed):
-                start_at = i - 1
-                embed1 = Embed(
-                    title=f"Results for `{command}`",
-                    description=f"Search results {i + 1} - {i + self.fields_per_embed}",
+                        )
+        data = self.data.copy()
+        if command:
+            command = command.lower()
+            answers = {}
+            list_cogs = []
+            list_commands = []
+            for interaction in data:
+                in_blacklist = False
+                if self.blacklist:
+                    for black in self.blacklist:
+                        if (
+                            black in interaction["name"]
+                            or black in interaction["cog"]["name"]
+                        ):
+                            in_blacklist = True
+                            break
+                if in_blacklist:
+                    continue
+                percent = ratio(command, interaction["cog"]["name"])
+                if interaction["cog"]["name"] not in answers.keys():
+                    answers[interaction["cog"]["name"]] = percent
+                    list_cogs.append(interaction["cog"]["name"])
+            for interaction in data:
+                in_blacklist = False
+                if self.blacklist:
+                    for black in self.blacklist:
+                        if (
+                            black in interaction["name"]
+                            or black in interaction["cog"]["name"]
+                        ):
+                            in_blacklist = True
+                            break
+                if in_blacklist:
+                    continue
+                percent = ratio(command, interaction["name"])
+                if interaction["name"] not in answers.keys():
+                    answers[interaction["name"]] = percent
+                    list_commands.append(interaction["name"])
+            sorted_data = sorted(answers, key=answers.get, reverse=True)[
+                : self.max_search_results
+            ]
+            embeds = []
+            for i in range(0, (len(sorted_data)), self.fields_per_embed):
+                page = Embed(
+                    title=f"Results for `{command}` {i + 1} - {i + self.fields_per_embed}",
                     colour=self.colour,
                 )
-                remainder = i + self.fields_per_embed
-                for match in cog_matches[i : (i + self.fields_per_embed)]:
-                    value1 = f"Category\n{cog_matches_desc[cog_matches[i : (i + self.fields_per_embed)].index(match, start_at + 1)]}\nCommands:\n"
-                    for cmd in cogs[match]:
-                        value1 += f"`/{cmd[0]}`, "
-                    value1 = value1[:-2] if value1.endswith(", ") else value1
-                    embed1.add_field(
-                        name=match,
-                        value=value1,
-                        inline=False,
-                    )
-                    remainder -= 1
-                    start_at = cog_matches[i : (i + self.fields_per_embed)].index(
-                        match, start_at + 1
-                    )
-                start_at = i - 1
-                for match in matches[i:remainder]:
-                    theres_dpy = ""
-                    if self.dpy_command and match in same.keys():
-                        theres_dpy = f"You can also use `{self.bot.command_prefix if not isinstance(matches_opt[matches[i:remainder].index(match, start_at + 1)], (str, type(None))) else '/'}{match}`"
-                    usage = f"Command\nIn {self.no_category_description if matches_cog[matches[i:remainder].index(match, start_at + 1)] == self.no_category_name else f'In {matches_cog[matches[i:remainder].index(match, start_at + 1)]}'}\n{matches_desc[matches[i:remainder].index(match, start_at + 1)][0] if isinstance(matches_desc[matches[i:remainder].index(match, start_at + 1)], list) else matches_desc[matches[i:remainder].index(match, start_at + 1)] if matches_desc[matches[i:remainder].index(match, start_at + 1)] != '' else 'No Description.'}\n{theres_dpy}\nHow to use:"
-                    how_to_use = f"\n```\n{'/' if not isinstance(matches_opt[matches[i:remainder].index(match, start_at + 1)], (str, type(None))) else self.bot.command_prefix}{match} "
-                    for _dict in matches_opt[
-                        matches[i:remainder].index(match, start_at + 1)
-                    ]:
-                        if isinstance(_dict, list):
-                            for _dict_ in _dict:
-                                _type = typer_dict(_dict_["type"], _dict_["choices"])
-                                how_to_use += f"[{_dict_['name']}: {'optional ' if not _dict_['required'] else ''}{_type}], "
-                        elif isinstance(_dict, dict):
-                            _type = typer_dict(_dict["type"], _dict["choices"])
-                            how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
-                        elif isinstance(_dict, str):
-                            how_to_use += _dict
-                    how_to_use = (
-                        how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
-                    )
-                    how_to_use += "\n```"
-                    usage += how_to_use
-                    embed1.add_field(name=match, value=usage, inline=False)
-                    start_at = matches[i:remainder].index(match, start_at + 1)
-                if self.footer is not None:
-                    embed1.set_footer(text=self.footer)
-                matches_embeds.append(embed1)
-            if len(matches_embeds) == 1:
-                await ctx.send(embed=matches_embeds[0])
-            else:
-                await Paginator(
-                    self.bot,
-                    ctx,
-                    matches_embeds,
-                    timeout=self.timeout,
-                    useFirstLast=self.extended_buttons,
-                    useSelect=self.use_select,
-                    authorOnly=self.author_only,
-                ).run()
+
+                for match in sorted_data[i : (i + self.fields_per_embed)]:
+                    if match in list_cogs:
+                        cog = None
+                        cmds = []
+                        for interaction in data:
+                            if match == interaction["cog"]["name"]:
+                                cog = interaction["cog"]
+                                cmds.append({interaction["name"]: interaction})
+                        if cog is not None:
+                            value = f"Category\n{self.no_category_description if cog['description'] is None else cog['description']}\nCommands:\n"
+                            for cmd in cmds:
+                                in_blacklist = False
+                                if self.blacklist:
+                                    for black in self.blacklist:
+                                        if black in list(cmd.keys())[0]:
+                                            in_blacklist = True
+                                            break
+                                if in_blacklist:
+                                    continue
+                                value += f"`{'/' if list(cmd.values())[0]['type'] in ['slash command', 'subcommand', 'subcommand group',] else '' if 'menu' in list(cmd.values())[0]['type'] else (self.bot.command_prefix if self.prefix is None else self.prefix)}{list(cmd.keys())[0]}`, "
+                            value = value[:-2] if value.endswith(", ") else value
+                            page.add_field(
+                                name=match,
+                                value=value,
+                                inline=False,
+                            )
+                    elif match in list_commands:
+                        for interaction in data:
+                            if match == interaction["name"]:
+                                break
+                        options = ""
+                        if interaction["type"] in [
+                            "slash command",
+                            "subcommand",
+                            "subcommand group",
+                        ]:
+                            for option in interaction["options"]:
+                                the_type = typer_dict(
+                                    option["type"],
+                                    option["choices"]
+                                    if "choices" in option.keys()
+                                    else [],
+                                )
+                                options += f"[{'optional ' if not option['required'] else ''}{the_type}], "
+                        elif "menu" in interaction["type"]:
+                            pass
+                        else:
+                            options += interaction["options"]
+                        options = options[:-2] if options.endswith(", ") else options
+                        how_to_use = f"How to use:\n```\n{'/' if interaction['type'] in ['slash command', 'subcommand', 'subcommand group',] else ('Right click on a ' + interaction['type'].replace(' menu', '')) if 'menu' in interaction['type'] else (self.bot.command_prefix if self.prefix is None else self.prefix)}{interaction['name']} {options}\n```"
+                        theres_dpy = "\n"
+                        if (
+                            self.dpy_command
+                            and interaction["name"] in duplicates.keys()
+                        ):
+                            theres_dpy = (
+                                f"\nYou can also use `{(self.bot.command_prefix if self.prefix is None else self.prefix)}{interaction['name']}`\n"
+                                if not isinstance(
+                                    interaction["options"], (str, type(None))
+                                )
+                                else f"\nYou can also use `/{interaction['name']}`\n"
+                            )
+                        page.add_field(
+                            name=interaction["name"],
+                            value=(
+                                (
+                                    self.no_category_description
+                                    if interaction["description"] == ""
+                                    else interaction["description"]
+                                )
+                                + f"\n{interaction['type'].capitalize()}"
+                                + theres_dpy
+                                + how_to_use
+                            ),
+                            inline=False,
+                        )
+                embeds.append(page)
+            await Paginator(self.bot, ctx, embeds).run()
         else:
             first_page = (
                 Embed(title="Help", color=self.colour)
@@ -404,62 +296,106 @@ class SlashHelp:
                     title="Help", description=self.front_description, color=self.colour
                 )
             )
-            for _cog in cogs:
-                value1 = f"{self.no_category_description if _cog == 'No Category' else cog_descs[_cog]}\n"
-                for cmd in cogs[_cog]:
-                    value1 += f"`/{cmd[0]}`, "
-                value1 = value1[:-2] if value1.endswith(", ") else value1
-                first_page.add_field(name=_cog, value=value1, inline=False)
-            if self.footer is not None:
-                first_page.set_footer(text=self.footer)
-            pages = [first_page]
-            for _cog in cogs:
-                for i in range(0, len(cogs[_cog]), self.fields_per_embed):
-                    embed2 = Embed(
-                        title=f"{_cog} {i + 1} - {i + self.fields_per_embed}",
+            embeds = [first_page]
+            cogs = []
+            for interaction in data:
+                in_blacklist = False
+                if self.blacklist:
+                    for black in self.blacklist:
+                        if (
+                            black in interaction["name"]
+                            or black in interaction["cog"]["name"]
+                        ):
+                            in_blacklist = True
+                            break
+                if in_blacklist:
+                    continue
+                if {
+                    "name": interaction["cog"]["name"],
+                    "description": interaction["cog"]["description"],
+                    "interactions": [],
+                } not in cogs:
+                    cogs.append(
+                        {
+                            "name": interaction["cog"]["name"],
+                            "description": interaction["cog"]["description"],
+                            "interactions": [],
+                        }
+                    )
+            for cog in cogs:
+                in_blacklist = False
+                if self.blacklist:
+                    for black in self.blacklist:
+                        if black in cog["name"]:
+                            in_blacklist = True
+                            break
+                if in_blacklist:
+                    continue
+                value = f"{self.no_category_description if cog['name'] == self.no_category_name else cog['description']}\n"
+                for interaction in data:
+                    in_blacklist = False
+                    if self.blacklist:
+                        for black in self.blacklist:
+                            if (
+                                black in interaction["name"]
+                                or black in interaction["cog"]["name"]
+                            ):
+                                in_blacklist = True
+                                break
+                    if in_blacklist:
+                        continue
+                    if interaction["cog"]["name"] == cog["name"]:
+                        cog["interactions"].append(interaction)
+                        value += f"`{'/' if interaction['type'] in ['slash command', 'subcommand', 'subcommand group',] else '' if 'menu' in interaction['type'] else (self.bot.command_prefix if self.prefix is None else self.prefix)}{interaction['name']}`, "
+                value = value[:-2] if value.endswith(", ") else value
+                first_page.add_field(name=cog["name"], value=value, inline=False)
+            for cog in cogs:
+                in_blacklist = False
+                if self.blacklist:
+                    for black in self.blacklist:
+                        if black in cog["name"]:
+                            in_blacklist = True
+                            break
+                if in_blacklist:
+                    continue
+                for i in range(0, len(cog["interactions"]), self.fields_per_embed):
+                    next_page = Embed(
+                        title=f"{cog['name']} {i + 1} - {i + self.fields_per_embed}",
                         description=self.no_category_description
-                        if _cog == self.no_category_name
-                        else cog_descs[_cog],
+                        if cog["name"] == self.no_category_name
+                        else cog["description"],
                         colour=self.colour,
                     )
-                    for cmd in cogs[_cog][i : (i + self.fields_per_embed)]:
-                        cmd_name = cmd[0]
-                        cmd_desc = cmd[1]
-                        cmd_opts = cmd[2]
+                    for cmd in cog["interactions"][i : (i + self.fields_per_embed)]:
+                        cmd_name = cmd["name"]
+                        cmd_desc = cmd["description"]
+                        cmd_opts = cmd["options"] if "options" in cmd.keys() else []
                         theres_dpy = "\n"
-                        if self.dpy_command and cmd_name in same.keys():
+                        if self.dpy_command and cmd_name in duplicates.keys():
                             theres_dpy = (
-                                f"\nYou can also use `{self.bot.command_prefix}{cmd_name}`\n"
+                                f"\nYou can also use `{(self.bot.command_prefix if self.prefix is None else self.prefix)}{cmd_name}`\n"
                                 if not isinstance(cmd_opts, (str, type(None)))
                                 else f"\nYou can also use `/{cmd_name}`\n"
                             )
                         desc = (
                             (
                                 "No description"
-                                if (
-                                    cmd_desc is None or cmd_desc == [] or cmd_desc == ""
-                                )
-                                else (
-                                    cmd_desc[0]
-                                    if isinstance(cmd_desc, list)
-                                    else cmd_desc
-                                )
+                                if cmd_desc is None or cmd_desc == [] or cmd_desc == ""
+                                else cmd_desc
                             )
                             + theres_dpy
                             + "How to use:"
                         )
-                        how_to_use = f"\n```\n{'/' if not isinstance(cmd_opts, (str, type(None))) else self.bot.command_prefix}{cmd_name} "
+                        how_to_use = f"\n```\n{'/' if not isinstance(cmd_opts, (str, type(None))) else ('Right click on a ' + cmd['type'].replace(' menu', '')) if 'menu' in cmd['type'] else (self.bot.command_prefix if self.prefix is None else self.prefix)}{cmd_name} "
                         if not isinstance(cmd_opts, (str, type(None))):
-                            for _dict in cmd_opts:
-                                if isinstance(_dict, list):
-                                    for _dict_ in _dict:
-                                        _type = typer_dict(
-                                            _dict_["type"], _dict_["choices"]
-                                        )
-                                        how_to_use += f"[{_dict_['name']}: {'optional ' if not _dict_['required'] else ''}{_type}], "
-                                else:
-                                    _type = typer_dict(_dict["type"], _dict["choices"])
-                                    how_to_use += f"[{_dict['name']}: {'optional ' if not _dict['required'] else ''}{_type}], "
+                            for option in cmd_opts:
+                                _type = typer_dict(
+                                    option["type"],
+                                    option["choices"]
+                                    if "choices" in option.keys()
+                                    else [],
+                                )
+                                how_to_use += f"[{option['name']}: {'optional ' if not option['required'] else ''}{_type}], "
                         elif cmd_opts is None:
                             pass
                         else:
@@ -468,18 +404,157 @@ class SlashHelp:
                             how_to_use[:-2] if how_to_use.endswith(", ") else how_to_use
                         )
                         how_to_use += "\n```"
-                        embed2.add_field(
+                        next_page.add_field(
                             name=cmd_name, value=desc + how_to_use, inline=False
                         )
                     if self.footer is not None:
-                        embed2.set_footer(text=self.footer)
-                    pages.append(embed2)
-            await Paginator(
-                self.bot,
-                ctx,
-                pages,
-                timeout=self.timeout,
-                useFirstLast=self.extended_buttons,
-                useSelect=self.use_select,
-                authorOnly=self.author_only,
-            ).run()
+                        next_page.set_footer(text=self.footer)
+                    embeds.append(next_page)
+            await Paginator(bot=self.bot, ctx=ctx, pages=embeds).run()
+
+    async def async_all_commands(self):
+        result = await get_all_commands(self.bot.user.id, self.token)
+        if self.guild_ids:
+            for guild_id in self.guild_ids:
+                result.append(
+                    await get_all_commands(self.bot.user.id, self.token, guild_id)
+                )
+        if not result:
+            raise CommandsNotFound
+        return result
+
+    async def async_separated(self):
+        all_commands = await self.async_all_commands()
+        commands, subcommands, menus = [], [], []
+        guild_ids_index = None
+        for command in all_commands:
+            if isinstance(command, list):
+                guild_ids_index = all_commands.index(command)
+                break
+            if command["type"] == 1:
+                if "options" in command.keys() and command["options"][0]["type"] in (
+                    1,
+                    2,
+                ):
+                    subcommands.append(command)
+                else:
+                    if "options" not in command.keys():
+                        command["options"] = []
+                    commands.append(command)
+            else:
+                menus.append(command)
+        if guild_ids_index:
+            for command in all_commands[guild_ids_index]:
+                if command["type"] == 1:
+                    if "options" in command.keys() and command["options"][0][
+                        "type"
+                    ] in (
+                        1,
+                        2,
+                    ):
+                        subcommands.append(command)
+                    else:
+                        if "options" not in command.keys():
+                            command["options"] = []
+                        commands.append(command)
+                else:
+                    menus.append(command)
+        master = []
+        for command in commands:
+            the_cog = getattr(self.slash.commands[command["name"]], "cog", None)
+            cog_name = (
+                self.no_category_name if the_cog is None else the_cog.qualified_name
+            )
+            cog_desc = (
+                self.no_category_description if the_cog is None else the_cog.description
+            )
+            master.append(
+                {
+                    "name": command["name"],
+                    "description": command["description"],
+                    "options": command["options"],
+                    "type": "slash command",
+                    "cog": {"name": cog_name, "description": cog_desc},
+                }
+            )
+        for subcommand in subcommands:
+            for sub in subcommand["options"]:
+                if sub["type"] == 1:
+                    try:
+                        _ = sub["options"]
+                    except KeyError:
+                        sub["options"] = []
+                    the_cog = getattr(
+                        self.slash.subcommands[subcommand["name"]][sub["name"]],
+                        "cog",
+                        None,
+                    )
+                    cog_name = (
+                        self.no_category_name
+                        if the_cog is None
+                        else the_cog.qualified_name
+                    )
+                    cog_desc = (
+                        self.no_category_description
+                        if the_cog is None
+                        else the_cog.description
+                    )
+                    master.append(
+                        {
+                            "name": f'{subcommand["name"]} {sub["name"]}',
+                            "description": sub["description"],
+                            "options": sub["options"],
+                            "type": "subcommand",
+                            "cog": {"name": cog_name, "description": cog_desc},
+                        }
+                    )
+                else:
+                    try:
+                        _ = sub["options"][0]["options"]
+                    except KeyError:
+                        sub["options"][0]["options"] = []
+                    the_cog = getattr(
+                        self.slash.subcommands[subcommand["name"]][sub["name"]][
+                            sub["options"][0]["name"]
+                        ],
+                        "cog",
+                        None,
+                    )
+                    cog_name = (
+                        self.no_category_name
+                        if the_cog is None
+                        else the_cog.qualified_name
+                    )
+                    cog_desc = (
+                        self.no_category_description
+                        if the_cog is None
+                        else the_cog.description
+                    )
+                    master.append(
+                        {
+                            "name": f'{subcommand["name"]} {sub["name"]} {sub["options"][0]["name"]}',
+                            "description": sub["options"][0]["description"],
+                            "options": sub["options"][0]["options"],
+                            "type": "subcommand group",
+                            "cog": {"name": cog_name, "description": cog_desc},
+                        }
+                    )
+
+        for menu in menus:
+            master.append(
+                {
+                    "name": menu["name"],
+                    "description": menu["description"],
+                    "type": ("user menu" if menu["type"] == 2 else "message menu"),
+                    "cog": {
+                        "name": self.no_category_name,
+                        "description": self.no_category_description,
+                    },
+                }
+            )
+        for interaction in master:
+            if "options" in interaction.keys() and interaction["options"]:
+                for option in interaction["options"]:
+                    if "required" not in option.keys():
+                        option["required"] = False
+        return master
