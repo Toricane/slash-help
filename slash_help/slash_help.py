@@ -287,7 +287,14 @@ class SlashHelp:
                             inline=False,
                         )
                 embeds.append(page)
-            await Paginator(self.bot, ctx, embeds).run()
+            await Paginator(
+                self.bot,
+                ctx,
+                embeds,
+                useFirstLast=self.extended_buttons,
+                useSelect=self.use_select,
+                authorOnly=self.author_only,
+            ).run()
         else:
             first_page = (
                 Embed(title="Help", color=self.colour)
@@ -410,7 +417,14 @@ class SlashHelp:
                     if self.footer is not None:
                         next_page.set_footer(text=self.footer)
                     embeds.append(next_page)
-            await Paginator(bot=self.bot, ctx=ctx, pages=embeds).run()
+            await Paginator(
+                bot=self.bot,
+                ctx=ctx,
+                pages=embeds,
+                useFirstLast=self.extended_buttons,
+                useSelect=self.use_select,
+                authorOnly=self.author_only,
+            ).run()
 
     async def async_all_commands(self):
         result = await get_all_commands(self.bot.user.id, self.token)
