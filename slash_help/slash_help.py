@@ -57,6 +57,7 @@ class SlashHelp:
         sync_commands: Optional[bool] = False,
         blacklist: Optional[List[str]] = None,
         prefix: Optional[str] = None,
+        auto_create: Optional[bool] = True,
     ) -> None:
         self.bot = bot
         self.slash = slash
@@ -85,10 +86,11 @@ class SlashHelp:
         self.sync_commands = sync_commands
         self.blacklist = blacklist
         self.prefix = prefix
+        self.auto_create = auto_create
 
         self.data = None
 
-        if not self.use_subcommand:
+        if not self.use_subcommand and self.auto_create:
             self.slash.add_slash_command(
                 self.send_help,
                 "help",
@@ -97,20 +99,21 @@ class SlashHelp:
                 guild_ids=self.guild_ids,
             )
         else:
-            if bot_name is None:
-                raise NameNeeded
-            is_bot_name = search(r"^[\w-]{1,32}$", bot_name)
-            if is_bot_name is None:
-                raise IncorrectName
-            self.slash.add_subcommand(
-                self.send_help,
-                base="help",
-                name=bot_name,
-                description="Get help!",
-                options=[create_option("command", "What command?", 3, False)],
-                guild_ids=self.guild_ids,
-            )
-        if self.dpy_command:
+            if self.auto_create:
+                if bot_name is None:
+                    raise NameNeeded
+                is_bot_name = search(r"^[\w-]{1,32}$", bot_name)
+                if is_bot_name is None:
+                    raise IncorrectName
+                self.slash.add_subcommand(
+                    self.send_help,
+                    base="help",
+                    name=bot_name,
+                    description="Get help!",
+                    options=[create_option("command", "What command?", 3, False)],
+                    guild_ids=self.guild_ids,
+                )
+        if self.dpy_command and self.auto_create:
 
             @GroupMixin.command(bot, name="help")
             async def _help(ctx, *, command=None):
