@@ -12,6 +12,7 @@ pip install -U slash-help
 ```
 Requirements (automatically installed when installing slash-help):
 - discord-py-interactions (version 3.0.2)
+- discord.py (version 1.7.3)
 - dinteractions-Paginator
 - thefuzz
 - Levenshtein
