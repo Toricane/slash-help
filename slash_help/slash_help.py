@@ -455,6 +455,7 @@ class SlashHelp:
 
     async def async_all_commands(self):
         result = await get_all_commands(self.bot.user.id, self.token)
+        result = [] if result is None else result
         if self.guild_ids:
             for guild_id in self.guild_ids:
                 result.append(
