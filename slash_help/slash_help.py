@@ -1,3 +1,8 @@
+from typing import Union, Optional, List
+from re import search
+
+from .errors import CommandsNotFound, NameNeeded, IncorrectName
+
 from discord_slash.utils.manage_commands import create_option, get_all_commands
 from discord_slash import SlashContext, SlashCommand
 
@@ -7,12 +12,7 @@ from discord.ext.commands import Bot
 from discord.ext.commands import GroupMixin
 
 from dinteractions_Paginator import Paginator
-
-from typing import Union, Optional, List
-from re import search
 from thefuzz.fuzz import ratio
-
-from .errors import CommandsNotFound, NameNeeded, IncorrectName
 
 
 def typer_dict(_type, choices=None) -> str:
@@ -32,6 +32,29 @@ def typer_dict(_type, choices=None) -> str:
 
 
 class SlashHelp:
+    __slots__ = (
+        "bot",
+        "slash",
+        "token",
+        "guild_ids",
+        "colour",
+        "timeout",
+        "fields_per_embed",
+        "footer",
+        "front_description",
+        "no_category_name",
+        "no_category_description",
+        "extended_buttons",
+        "use_select",
+        "author_only",
+        "dpy_command",
+        "max_search_results",
+        "sync_commands",
+        "blacklist",
+        "prefix",
+        "data",
+    )
+
     def __init__(
         self,
         bot: Union[Bot, Client],
@@ -79,18 +102,15 @@ class SlashHelp:
         self.extended_buttons = extended_buttons
         self.use_select = use_select
         self.author_only = author_only
-        self.use_subcommand = use_subcommand
-        self.bot_name = bot_name
         self.dpy_command = dpy_command
         self.max_search_results = max_search_results
         self.sync_commands = sync_commands
         self.blacklist = blacklist
         self.prefix = prefix
-        self.auto_create = auto_create
 
         self.data = None
 
-        if not self.use_subcommand and self.auto_create:
+        if not use_subcommand and auto_create:
             self.slash.add_slash_command(
                 self.send_help,
                 "help",
@@ -99,7 +119,7 @@ class SlashHelp:
                 guild_ids=self.guild_ids,
             )
         else:
-            if self.auto_create:
+            if auto_create:
                 if bot_name is None:
                     raise NameNeeded
                 is_bot_name = search(r"^[\w-]{1,32}$", bot_name)
@@ -113,7 +133,7 @@ class SlashHelp:
                     options=[create_option("command", "What command?", 3, False)],
                     guild_ids=self.guild_ids,
                 )
-        if self.dpy_command and self.auto_create:
+        if self.dpy_command and auto_create:
 
             @GroupMixin.command(bot, name="help")
             async def _help(ctx, *, command=None):
@@ -262,7 +282,7 @@ class SlashHelp:
                         else:
                             options += interaction["options"]
                         options = options[:-2] if options.endswith(", ") else options
-                        how_to_use = f"How to use:\n```\n{'/' if interaction['type'] in ['slash command', 'subcommand', 'subcommand group',] else ('Right click on a ' + interaction['type'].replace(' menu', '')) if 'menu' in interaction['type'] else (self.bot.command_prefix if self.prefix is None else self.prefix)}{interaction['name']} {options}\n```"
+                        how_to_use = f"How to use:\n```\n{'/' if interaction['type'] in ['slash command', 'subcommand', 'subcommand group',] else ('Right click on a ' + interaction['type'].replace(' menu', '')) if 'menu' in interaction['type'] else (self.bot.command_prefix if self.prefix is None else self.prefix)}{'' if 'menu' in interaction['type'] else interaction['name']} {options}\n```"
                         theres_dpy = "\n"
                         if (
                             self.dpy_command
@@ -294,6 +314,7 @@ class SlashHelp:
                 self.bot,
                 ctx,
                 embeds,
+                timeout=self.timeout,
                 useFirstLast=self.extended_buttons,
                 useSelect=self.use_select,
                 authorOnly=self.author_only,
@@ -396,7 +417,7 @@ class SlashHelp:
                             + theres_dpy
                             + "How to use:"
                         )
-                        how_to_use = f"\n```\n{'/' if not isinstance(cmd_opts, (str, type(None))) else ('Right click on a ' + cmd['type'].replace(' menu', '')) if 'menu' in cmd['type'] else (self.bot.command_prefix if self.prefix is None else self.prefix)}{cmd_name} "
+                        how_to_use = f"\n```\n{'/' if not isinstance(cmd_opts, (str, type(None))) else ('Right click on a ' + cmd['type'].replace(' menu', '')) if 'menu' in cmd['type'] else (self.bot.command_prefix if self.prefix is None else self.prefix)}{'' if 'menu' in cmd['type'] else cmd_name} "
                         if not isinstance(cmd_opts, (str, type(None))):
                             for option in cmd_opts:
                                 _type = typer_dict(
@@ -424,6 +445,7 @@ class SlashHelp:
                 bot=self.bot,
                 ctx=ctx,
                 pages=embeds,
+                timeout=self.timeout,
                 useFirstLast=self.extended_buttons,
                 useSelect=self.use_select,
                 authorOnly=self.author_only,
