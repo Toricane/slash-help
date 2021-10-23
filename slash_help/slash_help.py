@@ -461,7 +461,7 @@ class SlashHelp:
                 result.append(
                     await get_all_commands(self.bot.user.id, self.token, guild_id)
                 )
-        if not result:
+        if not result or not list(filter(lambda x: x is not None, result)):
             raise CommandsNotFound
         return result
 
