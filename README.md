@@ -51,7 +51,7 @@ async def help(ctx, *, command=None):
 
 @slash.slash(name="help")
 async def _help(ctx, command=None):
-    await help_slash.send_help(ctx, command)
+    await help_slash.send_help(ctx, command, guild_id=ctx.guild.id)
 ```
 
 ## *class* SlashHelp
@@ -63,6 +63,7 @@ async def _help(ctx, command=None):
 
 #### Optional:
 - `guild_ids`: `Optional[List[int]] = None` - a list of guild/server IDs to register the help slash command
+- `guild_id`: `Optional[int] = None` - what guild ID to use for getting guild commands
 
 ##### Keyword Arguments:
 - `color`: `Optional[discord.Color] = discord.Color.default()` - the color of the embed
