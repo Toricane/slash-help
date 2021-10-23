@@ -37,6 +37,7 @@ class SlashHelp:
         "slash",
         "token",
         "guild_ids",
+        "guild_id",
         "colour",
         "timeout",
         "fields_per_embed",
@@ -61,6 +62,7 @@ class SlashHelp:
         slash: SlashCommand,
         token: str,
         guild_ids: Optional[List[int]] = None,
+        guild_id: Optional[int] = None,
         *,
         color: Optional[Color] = Color.default(),
         colour: Optional[Colour] = Colour.default(),
@@ -86,6 +88,7 @@ class SlashHelp:
         self.slash = slash
         self.token = token
         self.guild_ids = guild_ids
+        self.guild_id = guild_id
         self.colour = (
             colour
             if colour != Colour.default()
@@ -144,12 +147,21 @@ class SlashHelp:
         ctx: SlashContext,
         command: Optional[str] = None,
         prefix: Optional[str] = None,
+        guild_id: Optional[int] = None,
     ) -> None:
         if prefix is not None:
             self.prefix = prefix
+        if guild_id is None:
+            guild_id = (
+                self.guild_id
+                if self.guild_id is not None
+                else self.guild_ids[0]
+                if self.guild_ids is not None
+                else guild_id
+            )
         duplicates = {}
         if self.data is None or self.sync_commands:
-            self.data = await self.async_separated()
+            self.data = await self.async_separated(guild_id)
             if self.dpy_command:
                 dpycmds = self.bot.commands
                 for dcmd in dpycmds:
@@ -453,20 +465,21 @@ class SlashHelp:
                 authorOnly=self.author_only,
             ).run()
 
-    async def async_all_commands(self):
+    async def async_all_commands(self, guild_id=None):
         result = await get_all_commands(self.bot.user.id, self.token)
         result = [] if result is None else result
-        if self.guild_ids:
-            for guild_id in self.guild_ids:
-                result.append(
-                    await get_all_commands(self.bot.user.id, self.token, guild_id)
-                )
+        if self.guild_ids or guild_id:
+            guild_id = self.guild_ids[0] if guild_id is None else guild_id
+            guild_commands = await get_all_commands(
+                self.bot.user.id, self.token, guild_id
+            )
+            result.append(guild_commands) if guild_commands is not None else None
         if not result or not list(filter(lambda x: x is not None, result)):
             raise CommandsNotFound
-        return result
+        return list(filter(lambda x: x is not None, result))
 
-    async def async_separated(self):
-        all_commands = await self.async_all_commands()
+    async def async_separated(self, guild_id=None):
+        all_commands = await self.async_all_commands(guild_id)
         commands, subcommands, menus = [], [], []
         guild_ids_index = None
         for command in all_commands:
