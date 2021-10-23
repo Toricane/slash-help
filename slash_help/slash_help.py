@@ -309,6 +309,8 @@ class SlashHelp:
                             ),
                             inline=False,
                         )
+                if self.footer is not None:
+                    page.set_footer(text=self.footer)
                 embeds.append(page)
             await Paginator(
                 self.bot,
