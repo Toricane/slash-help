@@ -27,7 +27,7 @@ from discord_slash import SlashCommand
 from discord.ext import commands
 from slash_help import SlashHelp
 
-bot = commands.Bot("/")
+bot = commands.Bot("your_prefix", help_command=None)
 slash = SlashCommand(bot, sync_commands=True)  # sync_commands=True preferred
 help_slash = SlashHelp(bot, slash, "your_bot_token", dpy_command=True)  # if you want a dpy command as well, and to show dpy commands in the help
 # and its done!
@@ -39,7 +39,7 @@ from discord_slash import SlashCommand
 from discord.ext import commands
 from slash_help import SlashHelp
 
-bot = commands.Bot("/")
+bot = commands.Bot("your_prefix", help_command=None)
 slash = SlashCommand(bot, sync_commands=True)  # sync_commands=True preferred
 help_slash = SlashHelp(bot, slash, "your_bot_token", dpy_command=True, auto_create=False)
 
