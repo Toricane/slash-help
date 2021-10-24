@@ -474,9 +474,10 @@ class SlashHelp:
                 self.bot.user.id, self.token, guild_id
             )
             result.append(guild_commands) if guild_commands is not None else None
-        if not result or not list(filter(lambda x: x is not None, result)):
+        result = list(filter(lambda x: x is not None, result))
+        if not result:
             raise CommandsNotFound
-        return list(filter(lambda x: x is not None, result))
+        return result
 
     async def async_separated(self, guild_id=None):
         all_commands = await self.async_all_commands(guild_id)
@@ -498,7 +499,7 @@ class SlashHelp:
                     commands.append(command)
             else:
                 menus.append(command)
-        if guild_ids_index:
+        if guild_ids_index is not None:
             for command in all_commands[guild_ids_index]:
                 if command["type"] == 1:
                     if "options" in command.keys() and command["options"][0][
