@@ -1,5 +1,7 @@
 # slash-help
 
+[![Downloads](https://static.pepy.tech/personalized-badge/slash-help?period=total&units=international_system&left_color=grey&right_color=blue&left_text=Downloads)](https://pypi.org/project/slash-help/) [![Discord](https://img.shields.io/discord/890021073465270312?color=blue&label=Discord)](https://discord.gg/Sk5qDBGPsQ)
+
 <img src="https://cdn.discordapp.com/attachments/890021074337660959/892945393988554782/new-slash-help-gif.gif" alt="slash-help gif"></img>
 
 discord-py-interactions slash command help
