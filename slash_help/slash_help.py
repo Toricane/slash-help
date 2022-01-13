@@ -14,6 +14,9 @@ from discord.ext.commands import GroupMixin
 from dinteractions_Paginator import Paginator
 from thefuzz.fuzz import ratio
 
+from asyncio import sleep
+from discord.errors import HTTPException
+
 
 def typer_dict(_type, choices=None) -> str:
     _typer_dict = {
@@ -456,8 +459,21 @@ class SlashHelp:
                         next_page.set_footer(text=self.footer)
                     embeds.append(next_page)
             for embed in embeds:
-                print(f"embed #{embeds.index(embed) + 1} {embed.description=}")
-                print(len(embed.description))
+                print(f"embed #{embeds.index(embed) + 1}")
+                try:
+                    print(len(embed))
+                except Exception:
+                    print("len(embed) failed")
+                try:
+                    await ctx.send(f"embed #{embeds.index(embed) + 1}")
+                    await sleep(10)
+                except HTTPException:
+                    print(f"embed #{embeds.index(embed) + 1} has failed!")
+                    try:
+                        print(len(embed))
+                    except Exception:
+                        print("len(embed) failed")
+                    print(f"{embed.to_dict()}")
             await Paginator(
                 bot=self.bot,
                 ctx=ctx,
