@@ -458,22 +458,7 @@ class SlashHelp:
                     if self.footer is not None:
                         next_page.set_footer(text=self.footer)
                     embeds.append(next_page)
-            for embed in embeds:
-                print(f"embed #{embeds.index(embed) + 1}")
-                try:
-                    print(len(embed))
-                except Exception:
-                    print("len(embed) failed")
-                try:
-                    await ctx.send(f"embed #{embeds.index(embed) + 1}")
-                    await sleep(10)
-                except HTTPException:
-                    print(f"embed #{embeds.index(embed) + 1} has failed!")
-                    try:
-                        print(len(embed))
-                    except Exception:
-                        print("len(embed) failed")
-                    print(f"{embed.to_dict()}")
+            print(f"{embeds[0].to_dict()}")
             await Paginator(
                 bot=self.bot,
                 ctx=ctx,
